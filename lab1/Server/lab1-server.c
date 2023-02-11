@@ -372,8 +372,11 @@ lcore_main(void)
 				tcp_h_ack = (struct rte_tcp_hdr *)ptr;
 				tcp_h_ack->src_port = tcp_h->dst_port;
 				tcp_h_ack->dst_port = tcp_h->src_port;
-				tcp_h_ack->recv_ack = rte_cpu_to_be_32(rte_be_to_cpu_32(tcp_h->sent_seq)); // Acknowledgement number is sequence number of the packet ack'd
-
+				uint32_t ack_seq = rte_be_to_cpu_32(tcp_h->sent_seq);
+#ifdef DEBUG
+				printf("Sending packet with ack: %u\n", ack_seq);
+#endif
+				tcp_h_ack->recv_ack = rte_cpu_to_be_32(ack_seq); // Acknowledgement number is sequence number of the packet ack'd
 
 				uint16_t tcp_cksum =  rte_ipv4_udptcp_cksum(ip_h_ack, (void *)tcp_h_ack);
 

@@ -63,7 +63,10 @@ static int parse_packet(struct sockaddr_in *src,
     struct rte_tcp_hdr * const tcp_hdr = (struct rte_tcp_hdr *)(p);
     p += sizeof(*tcp_hdr);
     header += sizeof(*tcp_hdr);
-
+#ifdef DEBUG
+    uint32_t ack_num = rte_cpu_to_be_32(tcp_hdr->recv_ack);
+    printf("Received packet with ack: %u\n", ack_num);
+#endif
     // In network byte order.
     in_port_t tcp_src_port = tcp_hdr->src_port;
     in_port_t tcp_dst_port = tcp_hdr->dst_port;
@@ -300,7 +303,10 @@ lcore_main()
         int pkts_sent = 0;
 
         unsigned char *pkt_buffer = rte_pktmbuf_mtod(pkt, unsigned char *);
-       
+#ifdef DEBUG
+        uint32_t seq_num = rte_cpu_to_be_32(tcp_hdr->sent_seq);
+        printf("Sending packet with seq: %u\n", seq_num);
+#endif
         pkts_sent = rte_eth_tx_burst(1, 0, &pkt, 1);
         if(pkts_sent == 1)
         {
