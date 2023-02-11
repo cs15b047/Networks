@@ -1,0 +1,74 @@
+DPDK understanding:
+
+- DPDK provides support for userspace packet processing- It's a userspace driver for NIC
+
+Terminologies
+EAL --> Environment Abstraction Layer -> Get cores, memory for mempool, discover NICs
+PMD --> Poll Mode Drivers
+    - Accessing devices with polling instead of interrupts
+    - Ethernet devices are used with PMDs in DPDK
+    - PMD API eg: rte_eth_tx_burst, rte_eth_rx_burst: Send/Receive burst of packets using Ethernet device
+    - A logical core polls the receive queue of a port
+
+- IGBIO/VFIO : Provide access to NIC registers to the driver
+
+- Mempool
+    Used instead of Malloc for performance reasons: Keep huge chunk of memory divided into packet size multiples.
+    Huge pages used to reduce # of entries in TLB: Packet sizes are ~2k/4k, So, normal page size --> 1 TLB entry per access
+- MBuf: Packet structure
+
+
+Server parses the packet sent by the client in the format [[Eth hdr] [IPv4 hdr] [UDP hdr] [data]]
+
+Ethernet header: [ Dst addr | Src addr | Frame type ]
+struct rte_ether_hdr {
+	struct rte_ether_addr dst_addr; /**< Destination address. */
+	struct rte_ether_addr src_addr; /**< Source address. */
+	rte_be16_t ether_type; /**< Frame type. */
+} __rte_aligned(2);
+
+IPv4 header: [ Type of service | packet length | packet ID | offset | TTL | protocol ID | checksum | Src address | Dst address ]
+struct rte_ipv4_hdr {
+	__extension__
+	union {
+		uint8_t version_ihl;    /**< version and header length */
+		struct {
+#if RTE_BYTE_ORDER == RTE_LITTLE_ENDIAN
+			uint8_t ihl:4;     /**< header length */
+			uint8_t version:4; /**< version */
+#elif RTE_BYTE_ORDER == RTE_BIG_ENDIAN
+			uint8_t version:4; /**< version */
+			uint8_t ihl:4;     /**< header length */
+#endif
+		};
+	};
+	uint8_t  type_of_service;	/**< type of service */
+	rte_be16_t total_length;	/**< length of packet */
+	rte_be16_t packet_id;		/**< packet ID */
+	rte_be16_t fragment_offset;	/**< fragmentation offset */
+	uint8_t  time_to_live;		/**< time to live */
+	uint8_t  next_proto_id;		/**< protocol ID */
+	rte_be16_t hdr_checksum;	/**< header checksum */
+	rte_be32_t src_addr;		/**< source address */
+	rte_be32_t dst_addr;		/**< destination address */
+} __rte_packed;
+
+
+
+Questions:
+1. Why Bad MAC errors occuring?
+2. Why server processing something when no packet sent?
+3. Do we need to implement retranmission and handle pkt loss?
+
+
+
+Assumption:
+1. No pkt drops
+
+Steps:
+1. Replace UDP with TCP -> add seq number in both Client and Server
+2. Client: 
+	1. Define window size and send those many packets in `rte_eth_tx_burst` first time. 
+	2. Send as many pkts recvd from `rte_eth_rx_burst` and slide the window (inc burst size)
+3. Measure:
+	1. For loop
