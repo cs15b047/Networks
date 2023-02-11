@@ -2,82 +2,10 @@
  * Copyright(c) 2010-2015 Intel Corporation
  */
 
-#include <stdint.h>
-#include <stdlib.h>
-#include <inttypes.h>
-#include <rte_eal.h>
-#include <rte_ethdev.h>
-#include <rte_cycles.h>
-#include <rte_lcore.h>
-#include <rte_mbuf.h>
-#include <rte_udp.h>
-#include <rte_ip.h>
-
-#include <rte_common.h>
+#include "utils.h"
 
 // #define PKT_TX_IPV4          (1ULL << 55)
 // #define PKT_TX_IP_CKSUM      (1ULL << 54)
-
-#define RX_RING_SIZE 1024
-#define TX_RING_SIZE 1024
-
-#define NUM_MBUFS 8191
-#define MBUF_CACHE_SIZE 250
-#define BURST_SIZE 32
-uint32_t NUM_PING = 100;
-
-/* Define the mempool globally */
-struct rte_mempool *mbuf_pool = NULL;
-static struct rte_ether_addr my_eth;
-static size_t message_size = 1000;
-static uint32_t seconds = 1;
-
-size_t window_len = 10;
-
-int flow_size = 10000;
-int packet_len = 1000;
-int flow_num = 1;
-
-
-static uint64_t raw_time(void) {
-    struct timespec tstart={0,0};
-    clock_gettime(CLOCK_MONOTONIC, &tstart);
-    uint64_t t = (uint64_t)(tstart.tv_sec*1.0e9 + tstart.tv_nsec);
-    return t;
-
-}
-
-static uint64_t time_now(uint64_t offset) {
-    return raw_time() - offset;
-}
-
-uint32_t
-checksum(unsigned char *buf, uint32_t nbytes, uint32_t sum)
-{
-	unsigned int	 i;
-
-	/* Checksum all the pairs of bytes first. */
-	for (i = 0; i < (nbytes & ~1U); i += 2) {
-		sum += (uint16_t)ntohs(*((uint16_t *)(buf + i)));
-		if (sum > 0xFFFF)
-			sum -= 0xFFFF;
-	}
-
-	if (i < nbytes) {
-		sum += buf[i] << 8;
-		if (sum > 0xFFFF)
-			sum -= 0xFFFF;
-	}
-
-	return sum;
-}
-
-uint32_t
-wrapsum(uint32_t sum)
-{
-	sum = ~sum & 0xFFFF;
-	return htons(sum);
-}
 
 static int parse_packet(struct sockaddr_in *src,
                         struct sockaddr_in *dst,
@@ -88,7 +16,7 @@ static int parse_packet(struct sockaddr_in *src,
     // packet layout order is (from outside -> in):
     // ether_hdr
     // ipv4_hdr
-    // udp_hdr
+    // udp_hdr --> tcp_hdr
     // client timestamp
     uint8_t *p = rte_pktmbuf_mtod(pkt, uint8_t *);
     size_t header = 0;
@@ -123,7 +51,7 @@ static int parse_packet(struct sockaddr_in *src,
     in_addr_t ipv4_src_addr = ip_hdr->src_addr;
     in_addr_t ipv4_dst_addr = ip_hdr->dst_addr;
 
-    if (IPPROTO_UDP != ip_hdr->next_proto_id) {
+    if (IPPROTO_TCP != ip_hdr->next_proto_id) {
         printf("Bad next proto_id\n");
         return 0;
     }
@@ -131,14 +59,14 @@ static int parse_packet(struct sockaddr_in *src,
     src->sin_addr.s_addr = ipv4_src_addr;
     dst->sin_addr.s_addr = ipv4_dst_addr;
     
-    // check udp header
-    struct rte_udp_hdr * const udp_hdr = (struct rte_udp_hdr *)(p);
-    p += sizeof(*udp_hdr);
-    header += sizeof(*udp_hdr);
+    // check tcp header
+    struct rte_tcp_hdr * const tcp_hdr = (struct rte_tcp_hdr *)(p);
+    p += sizeof(*tcp_hdr);
+    header += sizeof(*tcp_hdr);
 
     // In network byte order.
-    in_port_t udp_src_port = udp_hdr->src_port;
-    in_port_t udp_dst_port = udp_hdr->dst_port;
+    in_port_t tcp_src_port = tcp_hdr->src_port;
+    in_port_t tcp_dst_port = tcp_hdr->dst_port;
     int ret = 0;
 	
 
@@ -147,25 +75,25 @@ static int parse_packet(struct sockaddr_in *src,
 	uint16_t p3 = rte_cpu_to_be_16(5003);
 	uint16_t p4 = rte_cpu_to_be_16(5004);
 	
-	if (udp_hdr->dst_port ==  p1)
+	if (tcp_hdr->dst_port ==  p1)
 	{
 		ret = 1;
 	}
-	if (udp_hdr->dst_port ==  p2)
+	if (tcp_hdr->dst_port ==  p2)
 	{
 		ret = 2;
 	}
-	if (udp_hdr->dst_port ==  p3)
+	if (tcp_hdr->dst_port ==  p3)
 	{
 		ret = 3;
 	}
-	if (udp_hdr->dst_port ==  p4)
+	if (tcp_hdr->dst_port ==  p4)
 	{
 		ret = 4;
 	}
 
-    src->sin_port = udp_src_port;
-    dst->sin_port = udp_dst_port;
+    src->sin_port = tcp_src_port;
+    dst->sin_port = tcp_dst_port;
     
     src->sin_family = AF_INET;
     dst->sin_family = AF_INET;
@@ -276,7 +204,7 @@ lcore_main()
     // char *buf_ptr;
     struct rte_ether_hdr *eth_hdr;
     struct rte_ipv4_hdr *ipv4_hdr;
-    struct rte_udp_hdr *udp_hdr;
+    struct rte_tcp_hdr *tcp_hdr;
 
     // Specify the dst mac address here: 
     // 14:58:d0:58:fe:53
@@ -290,11 +218,17 @@ lcore_main()
     // TODO: add in scaffolding for timing/printing out quick statistics
     int outstanding[flow_num];
     uint16_t seq[flow_num];
+    // track window starting and ending
+    uint16_t window_start[flow_num];
+    uint16_t window_end[flow_num];
+
     size_t port_id = 0;
     for(size_t i = 0; i < flow_num; i++)
     {
         outstanding[i] = 0;
         seq[i] = 0;
+        window_start[i] = -1;
+        window_end[i] = -1;
     } 
 
     while (seq[port_id] < NUM_PING) {
@@ -320,11 +254,14 @@ lcore_main()
         ipv4_hdr = (struct rte_ipv4_hdr *)ptr;
         ipv4_hdr->version_ihl = 0x45;
         ipv4_hdr->type_of_service = 0x0;
-        ipv4_hdr->total_length = rte_cpu_to_be_16(sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_udp_hdr) + message_size);
+        // ipv4_hdr->total_length = rte_cpu_to_be_16(sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_udp_hdr) + message_size);
+        ipv4_hdr->total_length = rte_cpu_to_be_16(sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_tcp_hdr) + packet_len);
         ipv4_hdr->packet_id = rte_cpu_to_be_16(1);
         ipv4_hdr->fragment_offset = 0;
         ipv4_hdr->time_to_live = 64;
-        ipv4_hdr->next_proto_id = IPPROTO_UDP;
+        ipv4_hdr->next_proto_id = IPPROTO_TCP;
+        
+        // TODO: Maybe put IP of actual src and dst here
         ipv4_hdr->src_addr = rte_cpu_to_be_32("127.0.0.1");
         ipv4_hdr->dst_addr = rte_cpu_to_be_32("127.0.0.1");
 
@@ -335,19 +272,21 @@ lcore_main()
         ptr += sizeof(*ipv4_hdr);
 
         /* add in UDP hdr*/
-        udp_hdr = (struct rte_udp_hdr *)ptr;
+        tcp_hdr = (struct rte_tcp_hdr *)ptr;
+        // udp_hdr = (struct rte_udp_hdr *)ptr;
         uint16_t srcp = 5001 + port_id;
         uint16_t dstp = 5001 + port_id;
-        udp_hdr->src_port = rte_cpu_to_be_16(srcp);
-        udp_hdr->dst_port = rte_cpu_to_be_16(dstp);
-        udp_hdr->dgram_len = rte_cpu_to_be_16(sizeof(struct rte_udp_hdr) + packet_len);
+        tcp_hdr->src_port = rte_cpu_to_be_16(srcp);
+        tcp_hdr->dst_port = rte_cpu_to_be_16(dstp);
+        tcp_hdr->rx_win = rte_cpu_to_be_16(TCP_WINDOW_LEN * packet_len); // window size = # of packets * packet length
+        tcp_hdr->sent_seq = rte_cpu_to_be_32(seq[port_id]); // seq[flow] denotes sequence number per flow
 
-        uint16_t udp_cksum =  rte_ipv4_udptcp_cksum(ipv4_hdr, (void *)udp_hdr);
+        uint16_t tcp_cksum = rte_ipv4_udptcp_cksum(ipv4_hdr, (void *)tcp_hdr);
 
         // printf("Udp checksum is %u\n", (unsigned)udp_cksum);
-        udp_hdr->dgram_cksum = rte_cpu_to_be_16(udp_cksum);
-        ptr += sizeof(*udp_hdr);
-        header_size += sizeof(*udp_hdr);
+        tcp_hdr->cksum = rte_cpu_to_be_16(tcp_cksum);
+        ptr += sizeof(*tcp_hdr);
+        header_size += sizeof(*tcp_hdr);
 
         /* set the payload */
         memset(ptr, 'a', packet_len);

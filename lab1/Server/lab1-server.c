@@ -155,7 +155,7 @@ static int get_port(struct sockaddr_in *src,
     // packet layout order is (from outside -> in):
     // ether_hdr
     // ipv4_hdr
-    // udp_hdr
+    // tcp_hdr
     // client timestamp
     uint8_t *p = rte_pktmbuf_mtod(pkt, uint8_t *);
     size_t header = 0;
@@ -194,7 +194,7 @@ static int get_port(struct sockaddr_in *src,
     in_addr_t ipv4_src_addr = ip_hdr->src_addr;
     in_addr_t ipv4_dst_addr = ip_hdr->dst_addr;
 
-    if (IPPROTO_UDP != ip_hdr->next_proto_id) {
+    if (IPPROTO_TCP != ip_hdr->next_proto_id) {
         printf("Bad next proto_id\n");
         return 0;
     }
@@ -202,14 +202,14 @@ static int get_port(struct sockaddr_in *src,
     src->sin_addr.s_addr = ipv4_src_addr;
     dst->sin_addr.s_addr = ipv4_dst_addr;
 
-    // check udp header
-    struct rte_udp_hdr * const udp_hdr = (struct rte_udp_hdr *)(p);
-    p += sizeof(*udp_hdr);
-    header += sizeof(*udp_hdr);
+    // check tcp header
+    struct rte_tcp_hdr * const tcp_hdr = (struct rte_tcp_hdr *)(p);
+    p += sizeof(*tcp_hdr);
+    header += sizeof(*tcp_hdr);
 
     // In network byte order.
-    in_port_t udp_src_port = udp_hdr->src_port;
-    in_port_t udp_dst_port = udp_hdr->dst_port;
+    in_port_t tcp_src_port = tcp_hdr->src_port;
+    in_port_t tcp_dst_port = tcp_hdr->dst_port;
 	int ret = 0;
 	
 
@@ -217,27 +217,27 @@ static int get_port(struct sockaddr_in *src,
 	uint16_t p2 = rte_cpu_to_be_16(5002);
 	uint16_t p3 = rte_cpu_to_be_16(5003);
 	uint16_t p4 = rte_cpu_to_be_16(5004);
-	// printf("dst port %d, %d\n", udp_hdr->dst_port, p2);
+	// printf("dst port %d, %d\n", tcp_hdr->dst_port, p2);
 	
-	if (udp_hdr->dst_port ==  p1)
+	if (tcp_hdr->dst_port ==  p1)
 	{
 		ret = 1;
 	}
-	if (udp_hdr->dst_port ==  p2)
+	if (tcp_hdr->dst_port ==  p2)
 	{
 		ret = 2;
 	}
-	if (udp_hdr->dst_port ==  p3)
+	if (tcp_hdr->dst_port ==  p3)
 	{
 		ret = 3;
 	}
-	if (udp_hdr->dst_port ==  p4)
+	if (tcp_hdr->dst_port ==  p4)
 	{
 		ret = 4;
 	}
 
-    src->sin_port = udp_src_port;
-    dst->sin_port = udp_dst_port;
+    src->sin_port = tcp_src_port;
+    dst->sin_port = tcp_dst_port;
     
     src->sin_family = AF_INET;
     dst->sin_family = AF_INET;
@@ -286,7 +286,7 @@ lcore_main(void)
 			struct rte_mbuf *pkt;
 			struct rte_ether_hdr *eth_h;
 			struct rte_ipv4_hdr *ip_h;
-			struct rte_udp_hdr *udp_h;
+			struct rte_tcp_hdr *tcp_h;
 			struct rte_ether_addr eth_addr;
 			uint32_t ip_addr;
 			uint8_t i;
@@ -297,7 +297,7 @@ lcore_main(void)
 			// char *buf_ptr;
 			struct rte_ether_hdr *eth_h_ack;
 			struct rte_ipv4_hdr *ip_h_ack;
-			struct rte_udp_hdr *udp_h_ack;
+			struct rte_tcp_hdr *tcp_h_ack;
 
 			// Receive packets in a burst from the RX queue of the port
 			const uint16_t nb_rx = rte_eth_rx_burst(port, 0, bufs, BURST_SIZE);
@@ -312,8 +312,8 @@ lcore_main(void)
 				struct sockaddr_in src, dst;
                 void *payload = NULL;
                 size_t payload_length = 0;
-                int udp_port_id = get_port(&src, &dst, &payload, &payload_length, pkt);
-				if(udp_port_id != 0){
+                int tcp_port_id = get_port(&src, &dst, &payload, &payload_length, pkt);
+				if(tcp_port_id != 0){
 					printf("received: %d\n", rec);
 				}
 
@@ -329,7 +329,7 @@ lcore_main(void)
 				ip_h = rte_pktmbuf_mtod_offset(pkt, struct rte_ipv4_hdr *,
 											   sizeof(struct rte_ether_hdr));
 
-				udp_h = rte_pktmbuf_mtod_offset(pkt, struct rte_udp_hdr *,
+				tcp_h = rte_pktmbuf_mtod_offset(pkt, struct rte_tcp_hdr *,
 											   sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) );
 				// rte_pktmbuf_dump(stdout, pkt, pkt->pkt_len);
 				rec++;
@@ -356,11 +356,11 @@ lcore_main(void)
 				ip_h_ack = (struct rte_ipv4_hdr *)ptr;
 				ip_h_ack->version_ihl = 0x45;
 				ip_h_ack->type_of_service = 0x0;
-				ip_h_ack->total_length = rte_cpu_to_be_16(sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_udp_hdr) + ack_len);
+				ip_h_ack->total_length = rte_cpu_to_be_16(sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_tcp_hdr) + ack_len);
 				ip_h_ack->packet_id = rte_cpu_to_be_16(1);
 				ip_h_ack->fragment_offset = 0;
 				ip_h_ack->time_to_live = 64;
-				ip_h_ack->next_proto_id = IPPROTO_UDP;
+				ip_h_ack->next_proto_id = IPPROTO_TCP;
 				ip_h_ack->src_addr = ip_h->dst_addr;
 				ip_h_ack->dst_addr = ip_h->src_addr;
 
@@ -368,20 +368,21 @@ lcore_main(void)
 				ip_h_ack->hdr_checksum = rte_cpu_to_be_32(ipv4_checksum);
 				header_size += sizeof(*ip_h_ack);
 				ptr += sizeof(*ip_h_ack);
-				/* add in UDP hdr*/
-				udp_h_ack = (struct rte_udp_hdr *)ptr;
-				udp_h_ack->src_port = udp_h->dst_port;
-				udp_h_ack->dst_port = udp_h->src_port;
-				udp_h_ack->dgram_len = rte_cpu_to_be_16(sizeof(struct rte_udp_hdr)+ack_len);
+				/* add in tcp hdr*/
+				tcp_h_ack = (struct rte_tcp_hdr *)ptr;
+				tcp_h_ack->src_port = tcp_h->dst_port;
+				tcp_h_ack->dst_port = tcp_h->src_port;
+				tcp_h_ack->recv_ack = rte_cpu_to_be_32(rte_be_to_cpu_32(tcp_h->sent_seq)); // Acknowledgement number is sequence number of the packet ack'd
 
-				uint16_t udp_cksum =  rte_ipv4_udptcp_cksum(ip_h_ack, (void *)udp_h_ack);
+
+				uint16_t tcp_cksum =  rte_ipv4_udptcp_cksum(ip_h_ack, (void *)tcp_h_ack);
 
 				// Added code
-				header_size += sizeof(*udp_h_ack);
-				ptr += sizeof(*udp_h_ack);
+				header_size += sizeof(*tcp_h_ack);
+				ptr += sizeof(*tcp_h_ack);
 
-				// printf("Udp checksum is %u\n", (unsigned)udp_cksum);
-				udp_h_ack->dgram_cksum = rte_cpu_to_be_16(udp_cksum);
+				// printf("tcp checksum is %u\n", (unsigned)tcp_cksum);
+				tcp_h_ack->cksum = rte_cpu_to_be_16(tcp_cksum);
 				
 				/* set the payload */
 				memset(ptr, 'a', ack_len);
