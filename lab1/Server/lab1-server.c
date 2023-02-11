@@ -250,7 +250,7 @@ static int get_port(struct sockaddr_in *src,
 }
 
 /* Basic forwarding application lcore. 8< */
-static __rte_noreturn void
+static void
 lcore_main(void)
 {
 	uint16_t port;

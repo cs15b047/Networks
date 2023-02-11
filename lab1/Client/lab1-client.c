@@ -196,7 +196,7 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 
 /* >8 End Basic forwarding application lcore. */
 
-static __rte_noreturn void
+static void
 lcore_main()
 {
     struct rte_mbuf *pkts[BURST_SIZE];
