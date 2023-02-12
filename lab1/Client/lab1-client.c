@@ -2,203 +2,9 @@
  * Copyright(c) 2010-2015 Intel Corporation
  */
 
-#include "utils.h"
-
-// #define PKT_TX_IPV4          (1ULL << 55)
-// #define PKT_TX_IP_CKSUM      (1ULL << 54)
-
-static int parse_packet(struct sockaddr_in *src,
-                        struct sockaddr_in *dst,
-                        void **payload,
-                        size_t *payload_len,
-                        struct rte_mbuf *pkt)
-{
-    // packet layout order is (from outside -> in):
-    // ether_hdr
-    // ipv4_hdr
-    // udp_hdr --> tcp_hdr
-    // client timestamp
-    uint8_t *p = rte_pktmbuf_mtod(pkt, uint8_t *);
-    size_t header = 0;
-
-    // check the ethernet header
-    struct rte_ether_hdr * const eth_hdr = (struct rte_ether_hdr *)(p);
-    p += sizeof(*eth_hdr);
-    header += sizeof(*eth_hdr);
-    uint16_t eth_type = ntohs(eth_hdr->ether_type);
-    struct rte_ether_addr mac_addr = {};
-
-    rte_eth_macaddr_get(1, &mac_addr);
-    if (!rte_is_same_ether_addr(&mac_addr, &eth_hdr->dst_addr)) {
-        printf("Bad MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
-			   " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
-            eth_hdr->dst_addr.addr_bytes[0], eth_hdr->dst_addr.addr_bytes[1],
-			eth_hdr->dst_addr.addr_bytes[2], eth_hdr->dst_addr.addr_bytes[3],
-			eth_hdr->dst_addr.addr_bytes[4], eth_hdr->dst_addr.addr_bytes[5]);
-        return 1;
-    }
-    if (RTE_ETHER_TYPE_IPV4 != eth_type) {
-        printf("Bad ether type\n");
-        return 0;
-    }
-
-    // check the IP header
-    struct rte_ipv4_hdr *const ip_hdr = (struct rte_ipv4_hdr *)(p);
-    p += sizeof(*ip_hdr);
-    header += sizeof(*ip_hdr);
-
-    // In network byte order.
-    in_addr_t ipv4_src_addr = ip_hdr->src_addr;
-    in_addr_t ipv4_dst_addr = ip_hdr->dst_addr;
-
-    if (IPPROTO_TCP != ip_hdr->next_proto_id) {
-        printf("Bad next proto_id\n");
-        return 0;
-    }
-    
-    src->sin_addr.s_addr = ipv4_src_addr;
-    dst->sin_addr.s_addr = ipv4_dst_addr;
-    
-    // check tcp header
-    struct rte_tcp_hdr * const tcp_hdr = (struct rte_tcp_hdr *)(p);
-    p += sizeof(*tcp_hdr);
-    header += sizeof(*tcp_hdr);
-#ifdef DEBUG
-    uint32_t ack_num = rte_cpu_to_be_32(tcp_hdr->recv_ack);
-    printf("Received packet with ack: %u\n", ack_num);
-#endif
-    // In network byte order.
-    in_port_t tcp_src_port = tcp_hdr->src_port;
-    in_port_t tcp_dst_port = tcp_hdr->dst_port;
-    int ret = 0;
-	
-
-	uint16_t p1 = rte_cpu_to_be_16(5001);
-	uint16_t p2 = rte_cpu_to_be_16(5002);
-	uint16_t p3 = rte_cpu_to_be_16(5003);
-	uint16_t p4 = rte_cpu_to_be_16(5004);
-	
-	if (tcp_hdr->dst_port ==  p1)
-	{
-		ret = 1;
-	}
-	if (tcp_hdr->dst_port ==  p2)
-	{
-		ret = 2;
-	}
-	if (tcp_hdr->dst_port ==  p3)
-	{
-		ret = 3;
-	}
-	if (tcp_hdr->dst_port ==  p4)
-	{
-		ret = 4;
-	}
-
-    src->sin_port = tcp_src_port;
-    dst->sin_port = tcp_dst_port;
-    
-    src->sin_family = AF_INET;
-    dst->sin_family = AF_INET;
-    
-    *payload_len = pkt->pkt_len - header;
-    *payload = (void *)p;
-    return ret;
-
-}
-/* basicfwd.c: Basic DPDK skeleton forwarding example. */
-
-/*
- * Initializes a given port using global settings and with the RX buffers
- * coming from the mbuf_pool passed as a parameter.
- */
-
-/* Main functional part of port initialization. 8< */
-static inline int
-port_init(uint16_t port, struct rte_mempool *mbuf_pool)
-{
-	struct rte_eth_conf port_conf;
-	const uint16_t rx_rings = 1, tx_rings = 1;
-	uint16_t nb_rxd = RX_RING_SIZE;
-	uint16_t nb_txd = TX_RING_SIZE;
-	int retval;
-	uint16_t q;
-	struct rte_eth_dev_info dev_info;
-	struct rte_eth_txconf txconf;
-
-	if (!rte_eth_dev_is_valid_port(port))
-		return -1;
-
-	memset(&port_conf, 0, sizeof(struct rte_eth_conf));
-
-	retval = rte_eth_dev_info_get(port, &dev_info);
-	if (retval != 0)
-	{
-		printf("Error during getting device (port %u) info: %s\n",
-			   port, strerror(-retval));
-		return retval;
-	}
-
-	if (dev_info.tx_offload_capa & RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE)
-		port_conf.txmode.offloads |=
-			RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE;
-
-	/* Configure the Ethernet device. */
-	retval = rte_eth_dev_configure(port, rx_rings, tx_rings, &port_conf);
-	if (retval != 0)
-		return retval;
-
-	retval = rte_eth_dev_adjust_nb_rx_tx_desc(port, &nb_rxd, &nb_txd);
-	if (retval != 0)
-		return retval;
-
-	/* Allocate and set up 1 RX queue per Ethernet port. */
-	for (q = 0; q < rx_rings; q++)
-	{
-		retval = rte_eth_rx_queue_setup(port, q, nb_rxd,
-										rte_eth_dev_socket_id(port), NULL, mbuf_pool);
-		if (retval < 0)
-			return retval;
-	}
-
-	txconf = dev_info.default_txconf;
-	txconf.offloads = port_conf.txmode.offloads;
-	/* Allocate and set up 1 TX queue per Ethernet port. */
-	for (q = 0; q < tx_rings; q++)
-	{
-		retval = rte_eth_tx_queue_setup(port, q, nb_txd,
-										rte_eth_dev_socket_id(port), &txconf);
-		if (retval < 0)
-			return retval;
-	}
-
-	/* Starting Ethernet port. 8< */
-	retval = rte_eth_dev_start(port);
-	/* >8 End of starting of ethernet port. */
-	if (retval < 0)
-		return retval;
-
-	/* Display the port MAC address. */
-	retval = rte_eth_macaddr_get(port, &my_eth);
-	if (retval != 0)
-		return retval;
-
-	printf("Port %u MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
-		   " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
-		   port, RTE_ETHER_ADDR_BYTES(&my_eth));
-
-	/* Enable RX in promiscuous mode for the Ethernet device. */
-	retval = rte_eth_promiscuous_enable(port);
-	/* End of setting RX port in promiscuous mode. */
-	if (retval != 0)
-		return retval;
-
-	return 0;
-}
-/* >8 End of main functional part of port initialization. */
+#include "../Utils/utils.h"
 
 /* >8 End Basic forwarding application lcore. */
-
 static void
 lcore_main()
 {
@@ -208,10 +14,6 @@ lcore_main()
     struct rte_ether_hdr *eth_hdr;
     struct rte_ipv4_hdr *ipv4_hdr;
     struct rte_tcp_hdr *tcp_hdr;
-
-    // Specify the dst mac address here: 
-    // 14:58:d0:58:fe:53
-    struct rte_ether_addr dst = {{0x14,0x58,0xD0,0x58,0xFE,0x53}};
 
 	struct sliding_hdr *sld_h_ack;
     uint16_t nb_rx;
@@ -242,71 +44,33 @@ lcore_main()
             return -EINVAL;
         }
         size_t header_size = 0;
-
         uint8_t *ptr = rte_pktmbuf_mtod(pkt, uint8_t *);
+        uint32_t seq_num = seq[port_id];
         /* add in an ethernet header */
         eth_hdr = (struct rte_ether_hdr *)ptr;
-        
-        rte_ether_addr_copy(&my_eth, &eth_hdr->src_addr);
-        rte_ether_addr_copy(&dst, &eth_hdr->dst_addr);
-        eth_hdr->ether_type = rte_be_to_cpu_16(RTE_ETHER_TYPE_IPV4);
+        set_eth_hdrs(eth_hdr, &DST_MAC);
         ptr += sizeof(*eth_hdr);
         header_size += sizeof(*eth_hdr);
 
         /* add in ipv4 header*/
         ipv4_hdr = (struct rte_ipv4_hdr *)ptr;
-        ipv4_hdr->version_ihl = 0x45;
-        ipv4_hdr->type_of_service = 0x0;
-        // ipv4_hdr->total_length = rte_cpu_to_be_16(sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_udp_hdr) + message_size);
-        ipv4_hdr->total_length = rte_cpu_to_be_16(sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_tcp_hdr) + packet_len);
-        ipv4_hdr->packet_id = rte_cpu_to_be_16(1);
-        ipv4_hdr->fragment_offset = 0;
-        ipv4_hdr->time_to_live = 64;
-        ipv4_hdr->next_proto_id = IPPROTO_TCP;
-        
-        // TODO: Maybe put IP of actual src and dst here
-        ipv4_hdr->src_addr = rte_cpu_to_be_32("127.0.0.1");
-        ipv4_hdr->dst_addr = rte_cpu_to_be_32("127.0.0.1");
-
-        uint32_t ipv4_checksum = wrapsum(checksum((unsigned char *)ipv4_hdr, sizeof(struct rte_ipv4_hdr), 0));
-        // printf("Checksum is %u\n", (unsigned)ipv4_checksum);
-        ipv4_hdr->hdr_checksum = rte_cpu_to_be_32(ipv4_checksum);
-        header_size += sizeof(*ipv4_hdr);
+        set_ipv4_hdrs(ipv4_hdr, rte_cpu_to_be_32(DEFAULT_IP), rte_cpu_to_be_32(DEFAULT_IP));
         ptr += sizeof(*ipv4_hdr);
+        header_size += sizeof(*ipv4_hdr);
 
-        /* add in UDP hdr*/
+        /* add in tcp header*/
         tcp_hdr = (struct rte_tcp_hdr *)ptr;
-        // udp_hdr = (struct rte_udp_hdr *)ptr;
-        uint16_t srcp = 5001 + port_id;
-        uint16_t dstp = 5001 + port_id;
-        tcp_hdr->src_port = rte_cpu_to_be_16(srcp);
-        tcp_hdr->dst_port = rte_cpu_to_be_16(dstp);
-        tcp_hdr->rx_win = rte_cpu_to_be_16(TCP_WINDOW_LEN * packet_len); // window size = # of packets * packet length
-        tcp_hdr->sent_seq = rte_cpu_to_be_32(seq[port_id]); // seq[flow] denotes sequence number per flow
-
-        uint16_t tcp_cksum = rte_ipv4_udptcp_cksum(ipv4_hdr, (void *)tcp_hdr);
-
-        // printf("Udp checksum is %u\n", (unsigned)udp_cksum);
-        tcp_hdr->cksum = rte_cpu_to_be_16(tcp_cksum);
+        set_tcp_request_hdrs(tcp_hdr, ipv4_hdr, port_id, seq_num);
         ptr += sizeof(*tcp_hdr);
         header_size += sizeof(*tcp_hdr);
 
-        /* set the payload */
-        memset(ptr, 'a', packet_len);
+        set_payload(ptr, pkt, packet_len, header_size);
 
-        pkt->l2_len = RTE_ETHER_HDR_LEN;
-        pkt->l3_len = sizeof(struct rte_ipv4_hdr);
-        // pkt->ol_flags = PKT_TX_IP_CKSUM | PKT_TX_IPV4;
-        pkt->data_len = header_size + packet_len;
-        pkt->pkt_len = header_size + packet_len;
-        pkt->nb_segs = 1;
-        int pkts_sent = 0;
-
-        unsigned char *pkt_buffer = rte_pktmbuf_mtod(pkt, unsigned char *);
 #ifdef DEBUG
-        uint32_t seq_num = rte_cpu_to_be_32(tcp_hdr->sent_seq);
         printf("Sending packet with seq: %u\n", seq_num);
 #endif
+        int pkts_sent = 0;
+        unsigned char *pkt_buffer = rte_pktmbuf_mtod(pkt, unsigned char *);
         pkts_sent = rte_eth_tx_burst(1, 0, &pkt, 1);
         if(pkts_sent == 1)
         {
@@ -342,7 +106,7 @@ lcore_main()
             }
         }
 
-        // port_id = (port_id+1) % flow_num;
+        port_id = (port_id+1) % flow_num;
     }
     printf("Sent %"PRIu64" packets.\n", reqs);
     // dump_latencies(&latency_dist);
