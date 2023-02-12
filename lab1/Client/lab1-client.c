@@ -54,7 +54,7 @@ lcore_main()
 
         /* add in ipv4 header*/
         ipv4_hdr = (struct rte_ipv4_hdr *)ptr;
-        set_ipv4_hdrs(ipv4_hdr, rte_cpu_to_be_32(DEFAULT_IP), rte_cpu_to_be_32(DEFAULT_IP));
+        set_ipv4_hdrs(ipv4_hdr, rte_cpu_to_be_32(DEFAULT_IP), rte_cpu_to_be_32(DEFAULT_IP), packet_len);
         ptr += sizeof(*ipv4_hdr);
         header_size += sizeof(*ipv4_hdr);
 

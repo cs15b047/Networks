@@ -250,28 +250,27 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 /* >8 End of main functional part of port initialization. */
 
 
+////////////////////////////// HEADERS //////////////////////////////
+
 static void set_eth_hdrs(struct rte_ether_hdr *eth_hdr, struct rte_ether_addr *dst_mac) {
     rte_ether_addr_copy(&my_eth, &eth_hdr->src_addr);
     rte_ether_addr_copy(dst_mac, &eth_hdr->dst_addr);
     eth_hdr->ether_type = rte_be_to_cpu_16(RTE_ETHER_TYPE_IPV4);
 }
 
-static void set_ipv4_hdrs(struct rte_ipv4_hdr *ipv4_hdr, rte_be32_t src_addr, rte_be32_t dst_addr) {
+static void set_ipv4_hdrs(struct rte_ipv4_hdr *ipv4_hdr, rte_be32_t src_addr, rte_be32_t dst_addr, size_t pkt_len) {
     ipv4_hdr->version_ihl = 0x45;
     ipv4_hdr->type_of_service = 0x0;
-    // ipv4_hdr->total_length = rte_cpu_to_be_16(sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_udp_hdr) + message_size);
-    ipv4_hdr->total_length = rte_cpu_to_be_16(sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_tcp_hdr) + packet_len);
+    ipv4_hdr->total_length = rte_cpu_to_be_16(sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_tcp_hdr) + pkt_len);
     ipv4_hdr->packet_id = rte_cpu_to_be_16(1);
     ipv4_hdr->fragment_offset = 0;
     ipv4_hdr->time_to_live = 64;
     ipv4_hdr->next_proto_id = IPPROTO_TCP;
     
-    // TODO: Maybe put IP of actual src and dst here
     ipv4_hdr->src_addr = src_addr;
     ipv4_hdr->dst_addr = dst_addr;
 
     uint32_t ipv4_checksum = wrapsum(checksum((unsigned char *)ipv4_hdr, sizeof(struct rte_ipv4_hdr), 0));
-    // printf("Checksum is %u\n", (unsigned)ipv4_checksum);
     ipv4_hdr->hdr_checksum = rte_cpu_to_be_32(ipv4_checksum);
 }
 
@@ -288,6 +287,17 @@ static void set_tcp_request_hdrs(struct rte_tcp_hdr *tcp_hdr, struct rte_ipv4_hd
     // printf("Udp checksum is %u\n", (unsigned)udp_cksum);
     tcp_hdr->cksum = rte_cpu_to_be_16(tcp_cksum);
 }
+
+static void set_tcp_response_hdrs(struct rte_tcp_hdr *tcp_hdr, struct rte_ipv4_hdr *ipv4_hdr, uint16_t src_port, uint16_t dst_port, uint32_t ack_seq) {
+	tcp_hdr->src_port = src_port;
+	tcp_hdr->dst_port = dst_port;
+	tcp_hdr->recv_ack = rte_cpu_to_be_32(ack_seq); // Acknowledgement number is sequence number of the packet ack'd
+
+	uint16_t tcp_cksum =  rte_ipv4_udptcp_cksum(ipv4_hdr, (void *)tcp_hdr);
+	tcp_hdr->cksum = rte_cpu_to_be_16(tcp_cksum);
+}
+
+////////////////////////////// PAYLOAD //////////////////////////////
 
 static void set_payload(uint8_t *ptr, struct rte_mbuf *pkt, size_t pkt_len, size_t header_size) {
      /* set the payload */
