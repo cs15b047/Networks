@@ -72,6 +72,7 @@ lcore_main(void)
 					printf("received: %d\n", rec);
 				} else {
 					printf("Ignoring Bad MAC packet\n");
+					rte_pktmbuf_free(pkt);
 					continue;
 				}
 
@@ -143,12 +144,13 @@ lcore_main(void)
 			}
 
 			/* Free any unsent packets. */
-			if (unlikely(nb_tx < nb_rx))
-			{
-				uint16_t buf;
-				for (buf = nb_tx; buf < nb_rx; buf++)
-					rte_pktmbuf_free(acks[buf]);
-			}
+			// Can become double free if bad packets received and get ignored
+			// if (unlikely(nb_tx < nb_rx))
+			// {
+			// 	uint16_t buf;
+			// 	for (buf = nb_tx; buf < nb_rx; buf++)
+			// 		rte_pktmbuf_free(acks[buf]);
+			// }
 		}
 	}
 	/* >8 End of loop. */
