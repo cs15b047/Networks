@@ -70,6 +70,9 @@ lcore_main(void)
                 int tcp_port_id = parse_packet(&src, &dst, &payload, &payload_length, pkt);
 				if(tcp_port_id != 0){
 					printf("received: %d\n", rec);
+				} else {
+					printf("Ignoring Bad MAC packet\n");
+					continue;
 				}
 
 				eth_h = rte_pktmbuf_mtod(pkt, struct rte_ether_hdr *);

@@ -110,7 +110,7 @@ static int parse_packet(struct sockaddr_in *src,
             eth_hdr->dst_addr.addr_bytes[0], eth_hdr->dst_addr.addr_bytes[1],
 			eth_hdr->dst_addr.addr_bytes[2], eth_hdr->dst_addr.addr_bytes[3],
 			eth_hdr->dst_addr.addr_bytes[4], eth_hdr->dst_addr.addr_bytes[5]);
-        return 1;
+        return 0;
     }
     if (RTE_ETHER_TYPE_IPV4 != eth_type) {
         printf("Bad ether type\n");

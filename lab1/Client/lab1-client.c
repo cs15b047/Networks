@@ -97,11 +97,10 @@ lcore_main()
                 size_t payload_length = 0;
                 int p = parse_packet(&src, &dst, &payload, &payload_length, pkts[i]);
                 if (p != 0) {
-
                     rte_pktmbuf_free(pkts[i]);
                     outstanding[p-1]--;
                 } else {
-                    rte_pktmbuf_free(pkts[i]);
+                    printf("Ignoring bad MAC packet\n");
                 }
             }
         }
