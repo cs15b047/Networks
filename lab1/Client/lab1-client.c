@@ -41,10 +41,13 @@ struct rte_mbuf *create_packet(uint32_t seq_num, size_t port_id) {
 }
 
 
-int *process_packets(uint16_t num_recvd, struct rte_mbuf **pkts) {
+parsed_packet_info *process_packets(uint16_t num_recvd, struct rte_mbuf **pkts) {
     // printf("Received burst of %u\n", (unsigned)num_recvd);
     struct rte_tcp_hdr *tcp_h;
-    int *flow = (int*) malloc(num_recvd * sizeof(int));
+    parsed_packet_info *packet_info = (parsed_packet_info*) malloc(num_recvd * sizeof(parsed_packet_info));
+    // int *packet_info = (int*) malloc(num_recvd * sizeof(int));
+
+    // int *flow = (int*) malloc(num_recvd * sizeof(int));
     for (int i = 0; i < num_recvd; i++) {
         struct sockaddr_in src, dst;
         void *payload = NULL;
@@ -55,19 +58,20 @@ int *process_packets(uint16_t num_recvd, struct rte_mbuf **pkts) {
 											   sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) );
         if (f_num != 0) {
             rte_pktmbuf_free(pkts[i]);
-            flow[i] = f_num - 1;
+            packet_info[i].flow_num = f_num - 1;
+            packet_info[i].ack_num = rte_be_to_cpu_32(tcp_h->recv_ack);
         } else {
             printf("Ignoring bad MAC packet\n");
-            flow[i] = -1;
+            packet_info[i].flow_num = -1;
         }
     }
 
-    return flow;
+    return packet_info;
 }
 
 
 bool all_flows_completed(bool *flow_completed) {
-    for(size_t i = 0; i < FLOW_NUM; i++)
+    for(int i = 0; i < FLOW_NUM; i++)
     {
         if(!flow_completed[i]) return false;
     }
@@ -83,16 +87,17 @@ lcore_main()
     struct rte_mbuf *pkts_send_buffer[TCP_WINDOW_LEN];
     struct rte_mbuf *pkt;
 
-    uint16_t packets_recvd, packets_sent;
-    uint32_t seq_num;
-    uint32_t total_packets_sent[FLOW_NUM], total_packets_recvd[FLOW_NUM];
+    uint64_t packets_recvd, packets_sent;
+    uint64_t total_packets_sent[FLOW_NUM], total_packets_recvd[FLOW_NUM];
     bool flow_completed[FLOW_NUM];
+    parsed_packet_info *packet_infos;
     
     sliding_info window[FLOW_NUM];
+    timer_info timer[NUM_PACKETS];
 
     size_t port_id = 0;
 
-    for(size_t i = 0; i < FLOW_NUM; i++)
+    for(int i = 0; i < FLOW_NUM; i++)
     {
         window[i].next_seq = 0;
         window[i].last_recv_seq = 0;
@@ -101,37 +106,54 @@ lcore_main()
         flow_completed[i] = false;
     } 
 
+    struct timer_info overall_time;
+    overall_time.start_time = raw_time();
+
     while (!all_flows_completed(flow_completed)) {
-        if(window[port_id].last_recv_seq < NUM_PACKETS - 1) {
+        if(window[port_id].last_recv_seq < NUM_PACKETS) {
             // CREATE PACKETS
-            uint32_t num_packets = 0;
+            int64_t num_packets = 0, starting_seq_num = -1;
             while( window[port_id].next_seq < NUM_PACKETS && window[port_id].next_seq - window[port_id].last_recv_seq < TCP_WINDOW_LEN) {
-                seq_num = window[port_id].next_seq;
+                int64_t seq_num = window[port_id].next_seq;
                 pkt = create_packet(seq_num, port_id);
                 pkts_send_buffer[num_packets] = pkt;
                 
                 window[port_id].next_seq++;
                 num_packets++;
+                
+                if(starting_seq_num == -1) {
+                    starting_seq_num = seq_num;
+                }
             }
 
             if(num_packets > 0) {
                 // SEND PACKETS
+                uint64_t start_time = raw_time();
                 packets_sent = rte_eth_tx_burst(1, 0, pkts_send_buffer, num_packets);
                 // printf("Flow: %u, Sent packets : %u\n", port_id, packets_sent);
                 total_packets_sent[port_id] += packets_sent;
+                for(int64_t i = 0; i < num_packets; i++) {
+                    int64_t seq_num = starting_seq_num + i;
+                    timer[seq_num].start_time = start_time;
+                }
             }
 
             // POLL ON RECEIVE PACKETS
             packets_recvd = rte_eth_rx_burst(1, 0, pkts_recv_buffer, TCP_WINDOW_LEN);
+
             if (packets_recvd > 0) {
+                uint64_t end_time = raw_time();
                 // printf("Flow: %u, Received packets: %u\n", port_id, packets_recvd);
 
                 // PROCESS PACKETS
-                int *flows = process_packets(packets_recvd, pkts_recv_buffer);
-                for(int f = 0; f<packets_recvd; f++) {
-                    if(flows[f] != -1) {
-                        window[flows[f]].last_recv_seq++;
-                        total_packets_recvd[flows[f]]++;
+                packet_infos = process_packets(packets_recvd, pkts_recv_buffer);
+                for(uint64_t f = 0; f<packets_recvd; f++) {
+                    if(packet_infos[f].flow_num != -1) {
+
+                        window[packet_infos[f].flow_num].last_recv_seq++;
+                        
+                        total_packets_recvd[packet_infos[f].flow_num]++;
+                        timer[packet_infos[f].ack_num].end_time = end_time;
                     }
                 }
             }
@@ -142,11 +164,37 @@ lcore_main()
         port_id = (port_id+1) % FLOW_NUM;
     }
 
-    for(size_t i = 0; i < FLOW_NUM; i++)
-    {
+    overall_time.end_time = raw_time();
+
+    for(int i = 0; i < FLOW_NUM; i++){
         printf("Flow %u - Packets Sent: %u, Packets Received: %u\n", i, total_packets_sent[i], total_packets_recvd[i]);
     }
-    // dump_latencies(&latency_dist);
+
+
+    // calculate bandwidth
+    uint64_t overall_time_in_ns = overall_time.end_time - overall_time.start_time;
+    double overall_time_in_ms = overall_time_in_ns / 1000000.0;
+    double bandwidth_in_mbps = (FLOW_SIZE * 8 * FLOW_NUM) / (overall_time_in_ms * 1000);
+
+    printf("Overall Stats: Data: %u, Num Flows: %u, Time (ms): %f\n", FLOW_SIZE, FLOW_NUM, overall_time_in_ms);
+    printf("Bandwidth: %f Mbps\n", bandwidth_in_mbps);
+
+    // calculate latencies
+    uint64_t max_latency = 0, min_latency = INT32_MAX, avg_latency = 0, total_latency = 0;
+    if(FLOW_NUM == 1) {
+        for(uint32_t pkt = 0; pkt < NUM_PACKETS; pkt++) {
+            uint64_t latency_in_ns = timer[pkt].end_time - timer[pkt].start_time;
+            total_latency += latency_in_ns;
+            if(latency_in_ns > max_latency) {
+                max_latency = latency_in_ns;
+            }
+            if(latency_in_ns < min_latency) {
+                min_latency = latency_in_ns;
+            }
+        }
+        avg_latency = total_latency / NUM_PACKETS;
+        printf("Latency: Max: %f ms, Min: %f ms, Avg: %f ms\n", max_latency/1000000.0, min_latency/1000000.0, avg_latency/1000000.0);
+    }
     // return 0;
 }
 /*
@@ -162,13 +210,13 @@ int main(int argc, char *argv[])
 
     if (argc == 4) {
         FLOW_NUM = (int) atoi(argv[1]);
-        FLOW_SIZE =  (int) atoi(argv[2]);
+        FLOW_SIZE =  (uint64_t) rte_str_to_size(argv[2]);
         TCP_WINDOW_LEN = (int) atoi(argv[3]);
     } else {
         printf( "usage: ./lab1-client <flow num> <flow size> <window len>\n");
         return 1;
     }
-
+    packet_len = (packet_len < FLOW_SIZE) ? packet_len: FLOW_SIZE;
     NUM_PACKETS = FLOW_SIZE / packet_len;
 
 	/* Initializion the Environment Abstraction Layer (EAL). 8< */
