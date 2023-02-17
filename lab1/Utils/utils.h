@@ -22,7 +22,7 @@
 #define MBUF_CACHE_SIZE 250
 #define BURST_SIZE 32
 #define TCP_WINDOW_LEN 10
-uint32_t NUM_PING = 100;
+uint32_t NUM_PACKETS = 100;
 
 /* Define the mempool globally */
 struct rte_mempool *mbuf_pool = NULL;
@@ -37,8 +37,8 @@ int packet_len = 1000;
 int ack_len = 10;
 int flow_num = 1;
 
-// Specify the dst mac address and default ip here here: 
-struct rte_ether_addr DST_MAC = {{0x14,0x58,0xD0,0x58,0xFE,0x53}};
+// Specify the dst mac address and default ip here here:
+struct rte_ether_addr DST_MAC = {{0x14,0x58,0xD0,0x58,0xAF,0x13}};
 const char* DEFAULT_IP = "127.0.0.1";
 
 static uint64_t raw_time(void) {
@@ -315,5 +315,12 @@ static void set_payload(uint8_t *ptr, struct rte_mbuf *pkt, size_t pkt_len, size
     pkt->pkt_len = header_size + pkt_len;
     pkt->nb_segs = 1;
 }
+
+
+typedef struct sliding_info {
+    uint32_t last_sent_seq;
+    uint32_t last_recv_seq;
+} sliding_info;
+
 
 #endif /* UTILS_H */
