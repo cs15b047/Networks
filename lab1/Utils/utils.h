@@ -21,7 +21,6 @@
 #define NUM_MBUFS 8191
 #define MBUF_CACHE_SIZE 250
 #define BURST_SIZE 32
-#define TCP_WINDOW_LEN 50
 uint32_t NUM_PACKETS = 100;
 
 /* Define the mempool globally */
@@ -32,10 +31,12 @@ static uint32_t seconds = 1;
 
 size_t window_len = 10;
 
-int flow_size = 10000;
+int FLOW_SIZE = 10000;
+int FLOW_NUM = 1;
+int TCP_WINDOW_LEN = 10;
+
 int packet_len = 1000;
 int ack_len = 10;
-int flow_num = 1;
 
 // Specify the dst mac address and default ip here here:
 struct rte_ether_addr DST_MAC = {{0x14,0x58,0xD0,0x58,0xAF,0x13}};

@@ -42,7 +42,7 @@ struct rte_mbuf *create_packet(uint32_t seq_num, size_t port_id) {
 
 
 int *process_packets(uint16_t num_recvd, struct rte_mbuf **pkts) {
-    printf("Received burst of %u\n", (unsigned)num_recvd);
+    // printf("Received burst of %u\n", (unsigned)num_recvd);
     struct rte_tcp_hdr *tcp_h;
     int *flow = (int*) malloc(num_recvd * sizeof(int));
     for (int i = 0; i < num_recvd; i++) {
@@ -67,7 +67,7 @@ int *process_packets(uint16_t num_recvd, struct rte_mbuf **pkts) {
 
 
 bool all_flows_completed(bool *flow_completed) {
-    for(size_t i = 0; i < flow_num; i++)
+    for(size_t i = 0; i < FLOW_NUM; i++)
     {
         if(!flow_completed[i]) return false;
     }
@@ -83,16 +83,16 @@ lcore_main()
     struct rte_mbuf *pkts_send_buffer[TCP_WINDOW_LEN];
     struct rte_mbuf *pkt;
 
-    uint16_t packets_recvd;
+    uint16_t packets_recvd, packets_sent;
     uint32_t seq_num;
-    uint32_t total_packets_sent[flow_num], total_packets_recvd[flow_num];
-    bool flow_completed[flow_num];
+    uint32_t total_packets_sent[FLOW_NUM], total_packets_recvd[FLOW_NUM];
+    bool flow_completed[FLOW_NUM];
     
-    sliding_info window[flow_num];
+    sliding_info window[FLOW_NUM];
 
     size_t port_id = 0;
 
-    for(size_t i = 0; i < flow_num; i++)
+    for(size_t i = 0; i < FLOW_NUM; i++)
     {
         window[i].next_seq = 0;
         window[i].last_recv_seq = 0;
@@ -116,16 +116,15 @@ lcore_main()
 
             if(num_packets > 0) {
                 // SEND PACKETS
-                int pkts_sent = 0;
-                pkts_sent = rte_eth_tx_burst(1, 0, pkts_send_buffer, num_packets);
-                printf("Flow: %u, Sent packets : %u\n", port_id, pkts_sent);
-                total_packets_sent[port_id] += pkts_sent;
+                packets_sent = rte_eth_tx_burst(1, 0, pkts_send_buffer, num_packets);
+                // printf("Flow: %u, Sent packets : %u\n", port_id, packets_sent);
+                total_packets_sent[port_id] += packets_sent;
             }
 
             // POLL ON RECEIVE PACKETS
             packets_recvd = rte_eth_rx_burst(1, 0, pkts_recv_buffer, TCP_WINDOW_LEN);
             if (packets_recvd > 0) {
-                printf("Flow: %u, Received packets: %u\n", port_id, packets_recvd);
+                // printf("Flow: %u, Received packets: %u\n", port_id, packets_recvd);
 
                 // PROCESS PACKETS
                 int *flows = process_packets(packets_recvd, pkts_recv_buffer);
@@ -140,10 +139,10 @@ lcore_main()
             flow_completed[port_id] = true;
         }
         
-        port_id = (port_id+1) % flow_num;
+        port_id = (port_id+1) % FLOW_NUM;
     }
 
-    for(size_t i = 0; i < flow_num; i++)
+    for(size_t i = 0; i < FLOW_NUM; i++)
     {
         printf("Flow %u - Packets Sent: %u, Packets Received: %u\n", i, total_packets_sent[i], total_packets_recvd[i]);
     }
@@ -161,15 +160,16 @@ int main(int argc, char *argv[])
 	unsigned nb_ports;
 	uint16_t portid;
 
-    if (argc == 3) {
-        flow_num = (int) atoi(argv[1]);
-        flow_size =  (int) atoi(argv[2]);
+    if (argc == 4) {
+        FLOW_NUM = (int) atoi(argv[1]);
+        FLOW_SIZE =  (int) atoi(argv[2]);
+        TCP_WINDOW_LEN = (int) atoi(argv[3]);
     } else {
-        printf( "usage: ./lab1-client <flow_num> <flow_size>\n");
+        printf( "usage: ./lab1-client <flow num> <flow size> <window len>\n");
         return 1;
     }
 
-    NUM_PACKETS = flow_size / packet_len;
+    NUM_PACKETS = FLOW_SIZE / packet_len;
 
 	/* Initializion the Environment Abstraction Layer (EAL). 8< */
 	int ret = rte_eal_init(argc, argv);
