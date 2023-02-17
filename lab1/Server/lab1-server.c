@@ -68,9 +68,7 @@ lcore_main(void)
                 void *payload = NULL;
                 size_t payload_length = 0;
                 int tcp_port_id = parse_packet(&src, &dst, &payload, &payload_length, pkt);
-				if(tcp_port_id != 0){
-					printf("received: %d\n", rec);
-				} else {
+				if(tcp_port_id == 0){
 					printf("Ignoring Bad MAC packet\n");
 					rte_pktmbuf_free(pkt);
 					continue;
@@ -123,9 +121,6 @@ lcore_main(void)
 
 				set_payload(ptr, ack, ack_len, header_size);
 
-#ifdef DEBUG
-				printf("Sending packet with ack: %u\n", ack_seq);
-#endif
 				int pkts_sent = 0;
 				unsigned char *ack_buffer = rte_pktmbuf_mtod(ack, unsigned char *);
 				acks[nb_replies++] = ack;
