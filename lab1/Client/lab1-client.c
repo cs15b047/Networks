@@ -41,85 +41,112 @@ struct rte_mbuf *create_packet(uint32_t seq_num, size_t port_id) {
 }
 
 
-uint32_t process_packets(uint16_t num_recvd, struct rte_mbuf **pkts) {
+int *process_packets(uint16_t num_recvd, struct rte_mbuf **pkts) {
     printf("Received burst of %u\n", (unsigned)num_recvd);
     struct rte_tcp_hdr *tcp_h;
-    uint32_t ack_seq;
+    int *flow = (int*) malloc(num_recvd * sizeof(int));
     for (int i = 0; i < num_recvd; i++) {
         struct sockaddr_in src, dst;
         void *payload = NULL;
         size_t payload_length = 0;
-        int p = parse_packet(&src, &dst, &payload, &payload_length, pkts[i]);
+        int f_num = parse_packet(&src, &dst, &payload, &payload_length, pkts[i]);
 
         tcp_h = rte_pktmbuf_mtod_offset(pkts[i], struct rte_tcp_hdr *,
 											   sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) );
-        ack_seq = tcp_h->recv_ack;
-        if (p != 0) {
+        if (f_num != 0) {
             rte_pktmbuf_free(pkts[i]);
+            flow[i] = f_num - 1;
         } else {
             printf("Ignoring bad MAC packet\n");
+            flow[i] = -1;
         }
     }
 
-    return ack_seq;
+    return flow;
+}
+
+
+bool all_flows_completed(bool *flow_completed) {
+    for(size_t i = 0; i < flow_num; i++)
+    {
+        if(!flow_completed[i]) return false;
+    }
+
+    return true;
 }
 
 /* >8 End Basic forwarding application lcore. */
 static void
 lcore_main()
 {
-    struct rte_mbuf *pkts[BURST_SIZE];
+    struct rte_mbuf *pkts_recv_buffer[TCP_WINDOW_LEN];
+    struct rte_mbuf *pkts_send_buffer[TCP_WINDOW_LEN];
     struct rte_mbuf *pkt;
-    // char *buf_ptr;
-  
 
-	struct sliding_hdr *sld_h_ack;
-    uint16_t nb_rx;
-    uint64_t reqs = 0;
-    uint32_t seq_num, ack_num;
-    // uint64_t cycle_wait = intersend_time * rte_get_timer_hz() / (1e9);
+    uint16_t packets_recvd;
+    uint32_t seq_num;
+    uint32_t total_packets_sent[flow_num], total_packets_recvd[flow_num];
+    bool flow_completed[flow_num];
     
-    uint16_t seq[flow_num];
-    // track window starting and ending
     sliding_info window[flow_num];
 
     size_t port_id = 0;
+
     for(size_t i = 0; i < flow_num; i++)
     {
-        seq[i] = 0;
-        window[i].last_sent_seq = -1;
-        window[i].last_recv_seq = -1;
+        window[i].next_seq = 0;
+        window[i].last_recv_seq = 0;
+        total_packets_sent[i] = 0;
+        total_packets_recvd[i] = 0;
+        flow_completed[i] = false;
     } 
 
-    while (seq[port_id] < NUM_PACKETS) {
-        // CREATE PACKETS
-        seq_num = seq[port_id];
-        pkt = create_packet(seq_num, port_id);
-        printf("Sending packet with seq: %u\n", seq[port_id]);
+    while (!all_flows_completed(flow_completed)) {
+        if(window[port_id].last_recv_seq < NUM_PACKETS - 1) {
+            // CREATE PACKETS
+            uint32_t num_packets = 0;
+            while( window[port_id].next_seq < NUM_PACKETS && window[port_id].next_seq - window[port_id].last_recv_seq < TCP_WINDOW_LEN) {
+                seq_num = window[port_id].next_seq;
+                pkt = create_packet(seq_num, port_id);
+                pkts_send_buffer[num_packets] = pkt;
+                
+                window[port_id].next_seq++;
+                num_packets++;
+            }
 
-        // SEND PACKETS
-        int pkts_sent = 0;
-        unsigned char *pkt_buffer = rte_pktmbuf_mtod(pkt, unsigned char *);
-        pkts_sent = rte_eth_tx_burst(1, 0, &pkt, 1);
-        // printf("Packets sent: %u\n", pkts_sent);
-        if(pkts_sent == 1)
-        {
-            seq[port_id]++;
+            if(num_packets > 0) {
+                // SEND PACKETS
+                int pkts_sent = 0;
+                pkts_sent = rte_eth_tx_burst(1, 0, pkts_send_buffer, num_packets);
+                printf("Flow: %u, Sent packets : %u\n", port_id, pkts_sent);
+                total_packets_sent[port_id] += pkts_sent;
+            }
+
+            // POLL ON RECEIVE PACKETS
+            packets_recvd = rte_eth_rx_burst(1, 0, pkts_recv_buffer, TCP_WINDOW_LEN);
+            if (packets_recvd > 0) {
+                printf("Flow: %u, Received packets: %u\n", port_id, packets_recvd);
+
+                // PROCESS PACKETS
+                int *flows = process_packets(packets_recvd, pkts_recv_buffer);
+                for(int f = 0; f<packets_recvd; f++) {
+                    if(flows[f] != -1) {
+                        window[flows[f]].last_recv_seq++;
+                        total_packets_recvd[flows[f]]++;
+                    }
+                }
+            }
+        } else {
+            flow_completed[port_id] = true;
         }
-
-        // POLL ON RECEIVE PACKETS
-        nb_rx = 0;
-        reqs += 1;
-        nb_rx = rte_eth_rx_burst(1, 0, pkts, BURST_SIZE);
-        if (nb_rx == 0) {
-            continue;
-        }
-
-        // PROCESS PACKETS
-        ack_num = process_packets(nb_rx, pkts);
+        
         port_id = (port_id+1) % flow_num;
     }
-    printf("Sent %"PRIu64" packets.\n", reqs);
+
+    for(size_t i = 0; i < flow_num; i++)
+    {
+        printf("Flow %u - Packets Sent: %u, Packets Received: %u\n", i, total_packets_sent[i], total_packets_recvd[i]);
+    }
     // dump_latencies(&latency_dist);
     // return 0;
 }

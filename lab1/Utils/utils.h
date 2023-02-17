@@ -21,7 +21,7 @@
 #define NUM_MBUFS 8191
 #define MBUF_CACHE_SIZE 250
 #define BURST_SIZE 32
-#define TCP_WINDOW_LEN 10
+#define TCP_WINDOW_LEN 50
 uint32_t NUM_PACKETS = 100;
 
 /* Define the mempool globally */
@@ -143,10 +143,10 @@ static int parse_packet(struct sockaddr_in *src,
     struct rte_tcp_hdr * const tcp_hdr = (struct rte_tcp_hdr *)(p);
     p += sizeof(*tcp_hdr);
     header += sizeof(*tcp_hdr);
-#ifdef DEBUG
-    uint32_t ack_num = rte_cpu_to_be_32(tcp_hdr->recv_ack);
-    printf("Received packet with ack: %u\n", ack_num);
-#endif
+// #ifdef DEBUG
+//     uint32_t ack_num = rte_cpu_to_be_32(tcp_hdr->recv_ack);
+//     printf("Received packet with ack: %u\n", ack_num);
+// #endif
     // In network byte order.
     in_port_t tcp_src_port = tcp_hdr->src_port;
     in_port_t tcp_dst_port = tcp_hdr->dst_port;
@@ -318,7 +318,7 @@ static void set_payload(uint8_t *ptr, struct rte_mbuf *pkt, size_t pkt_len, size
 
 
 typedef struct sliding_info {
-    uint32_t last_sent_seq;
+    uint32_t next_seq;
     uint32_t last_recv_seq;
 } sliding_info;
 
