@@ -41,13 +41,11 @@ struct rte_mbuf *create_packet(uint32_t seq_num, size_t port_id) {
 }
 
 
-parsed_packet_info *process_packets(uint16_t num_recvd, struct rte_mbuf **pkts) {
+void process_packets(uint16_t num_recvd, struct rte_mbuf **pkts, parsed_packet_info *packet_infos) {
     // printf("Received burst of %u\n", (unsigned)num_recvd);
     struct rte_tcp_hdr *tcp_h;
-    parsed_packet_info *packet_info = (parsed_packet_info*) malloc(num_recvd * sizeof(parsed_packet_info));
-    // int *packet_info = (int*) malloc(num_recvd * sizeof(int));
+    
 
-    // int *flow = (int*) malloc(num_recvd * sizeof(int));
     for (int i = 0; i < num_recvd; i++) {
         struct sockaddr_in src, dst;
         void *payload = NULL;
@@ -58,15 +56,13 @@ parsed_packet_info *process_packets(uint16_t num_recvd, struct rte_mbuf **pkts) 
 											   sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) );
         if (f_num != 0) {
             rte_pktmbuf_free(pkts[i]);
-            packet_info[i].flow_num = f_num - 1;
-            packet_info[i].ack_num = rte_be_to_cpu_32(tcp_h->recv_ack);
+            packet_infos[i].flow_num = f_num - 1;
+            packet_infos[i].ack_num = rte_be_to_cpu_32(tcp_h->recv_ack);
         } else {
             printf("Ignoring bad MAC packet\n");
-            packet_info[i].flow_num = -1;
+            packet_infos[i].flow_num = -1;
         }
     }
-
-    return packet_info;
 }
 
 
@@ -90,10 +86,11 @@ lcore_main()
     uint64_t packets_recvd, packets_sent;
     uint64_t total_packets_sent[FLOW_NUM], total_packets_recvd[FLOW_NUM];
     bool flow_completed[FLOW_NUM];
-    parsed_packet_info *packet_infos;
     
     sliding_info window[FLOW_NUM];
-    timer_info timer[NUM_PACKETS];
+
+    timer_info *timer = (timer_info*) malloc(NUM_PACKETS * sizeof(timer_info));
+    parsed_packet_info *packet_infos = (parsed_packet_info*) malloc(TCP_WINDOW_LEN * sizeof(parsed_packet_info));
 
     size_t port_id = 0;
 
@@ -140,13 +137,13 @@ lcore_main()
 
             // POLL ON RECEIVE PACKETS
             packets_recvd = rte_eth_rx_burst(1, 0, pkts_recv_buffer, TCP_WINDOW_LEN);
+            uint64_t end_time = raw_time();
 
             if (packets_recvd > 0) {
-                uint64_t end_time = raw_time();
                 // printf("Flow: %u, Received packets: %u\n", port_id, packets_recvd);
 
                 // PROCESS PACKETS
-                packet_infos = process_packets(packets_recvd, pkts_recv_buffer);
+                process_packets(packets_recvd, pkts_recv_buffer, packet_infos);
                 for(uint64_t f = 0; f<packets_recvd; f++) {
                     if(packet_infos[f].flow_num != -1) {
 
@@ -195,6 +192,9 @@ lcore_main()
         avg_latency = total_latency / NUM_PACKETS;
         printf("Latency: Max: %f ms, Min: %f ms, Avg: %f ms\n", max_latency/1000000.0, min_latency/1000000.0, avg_latency/1000000.0);
     }
+
+    free(packet_infos);
+    free(timer);
     // return 0;
 }
 /*

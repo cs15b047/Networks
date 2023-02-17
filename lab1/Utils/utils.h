@@ -15,23 +15,20 @@
 
 #include <rte_common.h>
 
+#include <time.h>
 #define RX_RING_SIZE 1024
 #define TX_RING_SIZE 1024
 
 #define NUM_MBUFS 8191
 #define MBUF_CACHE_SIZE 250
 #define BURST_SIZE 32
-uint32_t NUM_PACKETS = 100;
+uint64_t NUM_PACKETS = 100;
 
 /* Define the mempool globally */
 struct rte_mempool *mbuf_pool = NULL;
 static struct rte_ether_addr my_eth;
 static size_t message_size = 1000;
-static uint32_t seconds = 1;
-
-size_t window_len = 10;
-
-int FLOW_SIZE = 10000;
+uint64_t FLOW_SIZE = 10000;
 int FLOW_NUM = 1;
 int TCP_WINDOW_LEN = 10;
 
@@ -319,9 +316,19 @@ static void set_payload(uint8_t *ptr, struct rte_mbuf *pkt, size_t pkt_len, size
 
 
 typedef struct sliding_info {
-    uint32_t next_seq;
-    uint32_t last_recv_seq;
+    uint64_t next_seq;
+    uint64_t last_recv_seq;
 } sliding_info;
 
+
+typedef struct parsed_packet_info {
+    int64_t flow_num;
+    uint64_t ack_num;
+} parsed_packet_info;
+
+typedef struct timer_info {
+    uint64_t start_time;
+    uint64_t end_time;
+} timer_info;
 
 #endif /* UTILS_H */
