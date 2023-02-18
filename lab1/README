@@ -1,0 +1,24 @@
+CS usernames: ajsj7598, sarthi
+
+Assumptions:
+- All traffic is sent/received through a single DPDK physical port and using a single queue.
+- All measurements are reported as an average of 5 independent runs (unless stated otherwise).
+- We use a packet size of 1KB, and the maximum allowed packet size is around 1500 as Ethernet has an MTU of 1500. Packet sizes higher than 1500 failed to transmit/receive.
+- We use a static TCP window size of 50 for our experiments. We assume no packets are dropped and do not handle retransmissions.
+
+How to run:
+
+Server:
+1. cd Server
+2. make clean && make
+3. cd build
+4. sudo ./lab1-server
+
+Client:
+1. cd Client
+2. sudo ./runner.sh
+
+Process the results:
+1. pip3 install pandas
+2. cd Client
+3. python3 summarize.py 

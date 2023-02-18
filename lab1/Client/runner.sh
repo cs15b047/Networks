@@ -21,6 +21,11 @@ OVERALL_LATENCY_HEADER="Flow Size, Window Size, Overall Latency"
 BANDWIDTH_HEADER="Flow Size, Window Size, Bandwidth"
 MULTI_FLOW_BANDWIDTH_HEADER="Flow Num, Window Size, Bandwidth"
 
+# Make directories for storing results
+mkdir -p $BASE_DIR/singleflow-latency
+mkdir -p $BASE_DIR/singleflow-bandwidth
+mkdir -p $BASE_DIR/multiflow-bandwidth
+
 for (( ITER=0; ITER<$NUM_ITERS; ITER++ ))
 do
     LATENCY_STATS="$BASE_DIR/singleflow-latency/per_packet_latency_iter_$ITER.csv" 
