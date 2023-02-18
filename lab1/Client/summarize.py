@@ -76,9 +76,13 @@ def filter_dict(d, keys):
 def get_metrics(d):
     return {k: (sum(d[k]) / len(d[k]), min(d[k]), max(d[k])) for k in d.keys() if k in d}
 
-def write_dict_to_csv(d, filename):
-    metrics_dict = get_metrics(d)
-    df = pd.DataFrame.from_dict(metrics_dict, orient='index')
+def write_dict_to_csv(d, filename, print_metrics = True):
+    results_dict = {}
+    if print_metrics:
+        results_dict = get_metrics(d)
+    else:
+        results_dict = d
+    df = pd.DataFrame.from_dict(results_dict, orient='index')
     df.to_csv(filename, header=False)
 
 latency_flow_sizes = [64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384]
@@ -96,6 +100,9 @@ per_packet_latency_min = filter_dict(per_packet_latency_min, latency_flow_sizes)
 per_packet_latency_max = filter_dict(per_packet_latency_max, latency_flow_sizes)
 
 write_dict_to_csv(per_packet_latency_avg, "per_packet_latency_avg.csv")
+write_dict_to_csv(per_packet_latency_min, "per_packet_latency_min.csv")
+write_dict_to_csv(per_packet_latency_max, "per_packet_latency_max.csv")
+
 # print(per_packet_latency_avg)
 
 bandwidth = get_single_flow_bandwidth()

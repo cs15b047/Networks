@@ -35,7 +35,7 @@ do
 done
 
 echo "Running single flow latency tests"
-TCP_WINDOW_LEN=50
+TCP_WINDOW_LEN=20
 FLOW_NUM=1
 for (( FLOW_SIZE=$FLOW_SIZE_START_SM; FLOW_SIZE<=$FLOW_SIZE_END_SM; FLOW_SIZE*=2 ))
 do
@@ -48,7 +48,7 @@ done
 
 
 echo "Running single flow bandwidth tests"
-TCP_WINDOW_LEN=50
+TCP_WINDOW_LEN=20
 FLOW_NUM=1
 for (( FLOW_SIZE=$FLOW_SIZE_START_LG; FLOW_SIZE<=$FLOW_SIZE_END_LG; FLOW_SIZE*=2 ))
 do
@@ -62,7 +62,7 @@ done
 
 
 echo "Running multi flow bandwidth tests"
-TCP_WINDOW_LEN=50
+TCP_WINDOW_LEN=20
 MAX_FLOWS=8
 FLOW_SIZE=$((100*1024*1024))
 
