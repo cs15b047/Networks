@@ -5,6 +5,31 @@
 #include "../Utils/utils.h"
 
 
+#define LATENCY_STATS 0
+#define OVERALL_LATENCY_STATS 1
+#define BANDWIDTH_STATS 2
+#define MULTI_FLOW_BANDWIDTH_STATS 3
+
+
+char *OUTPUT_DIR;
+int ITER_NUM;
+char *FILE_NAMES[5];
+
+void write_to_file(char *filename, char *data, bool append) {
+    FILE *fp;
+    if (append) {
+        fp = fopen(filename, "a");
+    } else {
+        fp = fopen(filename, "w");
+    }
+    if (fp == NULL) {
+        printf("Error opening file %s for writing", filename);
+    }
+    fprintf(fp, "%s\n", data);
+    fclose(fp);
+}  
+
+
 struct rte_mbuf *create_packet(uint32_t seq_num, size_t port_id) {
     struct rte_ether_hdr *eth_hdr;
     struct rte_ipv4_hdr *ipv4_hdr;
@@ -174,7 +199,14 @@ lcore_main()
     double bandwidth_in_mbps = (FLOW_SIZE * 8 * FLOW_NUM) / (overall_time_in_ms * 1000);
 
     printf("Overall Stats: Data: %u, Num Flows: %u, Time (ms): %f\n", FLOW_SIZE, FLOW_NUM, overall_time_in_ms);
+    char *overall_stats_str;
+    asprintf(&overall_stats_str, "%lu,%lu,%.3f", FLOW_SIZE, TCP_WINDOW_LEN, overall_time_in_ms);
+    write_to_file(FILE_NAMES[OVERALL_LATENCY_STATS], overall_stats_str, true);
+
     printf("Bandwidth: %f Mbps\n", bandwidth_in_mbps);
+    char *bandwidth_str;
+    asprintf(&bandwidth_str, "%lu,%lu,%.3f", FLOW_SIZE, TCP_WINDOW_LEN, bandwidth_in_mbps);
+    write_to_file(FILE_NAMES[BANDWIDTH_STATS], bandwidth_str, true);
 
     // calculate latencies
     uint64_t max_latency = 0, min_latency = INT32_MAX, avg_latency = 0, total_latency = 0;
@@ -191,12 +223,33 @@ lcore_main()
         }
         avg_latency = total_latency / NUM_PACKETS;
         printf("Latency: Max: %f ms, Min: %f ms, Avg: %f ms\n", max_latency/1000000.0, min_latency/1000000.0, avg_latency/1000000.0);
-    }
+        char *latency_str;
+        asprintf(&latency_str, "%lu,%lu,%.3f,%.3f,%.3f", FLOW_SIZE, TCP_WINDOW_LEN, avg_latency/1000000.0, max_latency/1000000.0, min_latency/1000000.0);
+        write_to_file(FILE_NAMES[LATENCY_STATS], latency_str, true);
+    } 
+
+    char *multi_flow_bandwidth_str;
+    asprintf(&multi_flow_bandwidth_str, "%lu,%lu,%.3f", FLOW_NUM, TCP_WINDOW_LEN, bandwidth_in_mbps / FLOW_NUM);
+    write_to_file(FILE_NAMES[MULTI_FLOW_BANDWIDTH_STATS], multi_flow_bandwidth_str, true);
+    
 
     free(packet_infos);
     free(timer);
     // return 0;
 }
+
+void setup_stats_files() {
+    size_t file_names = sizeof(FILE_NAMES) / sizeof(FILE_NAMES[0]);
+    for(int i = 0; i < file_names; i++) {
+        FILE_NAMES[i] = (char *) malloc(500 * sizeof(char));
+    }
+
+    sprintf(FILE_NAMES[LATENCY_STATS], "%s/singleflow-latency/per_packet_latency_iter_%lu.csv", OUTPUT_DIR, ITER_NUM);
+    sprintf(FILE_NAMES[OVERALL_LATENCY_STATS], "%s/singleflow-latency/overall_latency_iter_%lu.csv", OUTPUT_DIR, ITER_NUM);
+    sprintf(FILE_NAMES[BANDWIDTH_STATS], "%s/singleflow-bandwidth/bandwidth_iter_%lu.csv", OUTPUT_DIR, ITER_NUM);
+    sprintf(FILE_NAMES[MULTI_FLOW_BANDWIDTH_STATS], "%s/multiflow-bandwidth/multbandwidth_iter_%lu.csv", OUTPUT_DIR, ITER_NUM);
+}
+
 /*
  * The main function, which does initialization and calls the per-lcore
  * functions.
@@ -208,16 +261,21 @@ int main(int argc, char *argv[])
 	unsigned nb_ports;
 	uint16_t portid;
 
-    if (argc == 4) {
+    if (argc == 6) {
         FLOW_NUM = (int) atoi(argv[1]);
         FLOW_SIZE =  (uint64_t) rte_str_to_size(argv[2]);
         TCP_WINDOW_LEN = (int) atoi(argv[3]);
+        OUTPUT_DIR = argv[4];
+        ITER_NUM = (int) atoi(argv[5]);
     } else {
-        printf( "usage: ./lab1-client <flow num> <flow size> <window len>\n");
+        printf( "usage: ./lab1-client <flow num> <flow size> <window len> <output dir> <iter num>\n");
         return 1;
     }
     packet_len = (packet_len < FLOW_SIZE) ? packet_len: FLOW_SIZE;
     NUM_PACKETS = FLOW_SIZE / packet_len;
+
+    printf("Flow Num: %lu, Flow Size: %lu, Window Len: %lu, Iter Num: %lu\n", FLOW_NUM, FLOW_SIZE, TCP_WINDOW_LEN, ITER_NUM);
+    setup_stats_files();
 
 	/* Initializion the Environment Abstraction Layer (EAL). 8< */
 	int ret = rte_eal_init(argc, argv);
