@@ -1,3 +1,5 @@
 .vscode/
 Client/build/
 Server/build/
+Measurement/
+*.csv
