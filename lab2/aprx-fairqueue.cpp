@@ -233,12 +233,13 @@ AprxFairQueue::printStats()
             counts[fid] = counts[fid] + 1;
         }
     }
-
-    cout << str() << " " << timeAsMs(EventList::Get().now()) << " stats";
-    for (auto it = counts.begin(); it != counts.end(); it++) {
-        cout << " " << it->first << "->" << it->second;
+    if(DEBUG_HTSIM) {
+        cout << str() << " " << timeAsMs(EventList::Get().now()) << " stats";
+        for (auto it = counts.begin(); it != counts.end(); it++) {
+            cout << " " << it->first << "->" << it->second;
+        }
+        cout << endl;
     }
-    cout << endl;
 
     //cout << "AFQ: " << _error << " " << _count << " " << _zero << endl;
 }

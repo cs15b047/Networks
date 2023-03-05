@@ -27,6 +27,8 @@ namespace conga {
     const uint64_t LEAF_SPEED = 10000000000; // 10gbps
     const uint64_t CORE_SPEED = 40000000000; // 40gbps
 
+    const double LINK_DELAY = 0.1;
+
     // Server <--> ToR
     // downlink
     Pipe  *pTorServer[N_LEAF][N_SERVER];
@@ -61,7 +63,7 @@ void buildTopology(string &qType, Logfile &logfile) {
     for (int i = 0; i < N_LEAF; i++) {
         for (int j = 0; j < N_SERVER; j++) {
             // uplink
-            pServerTor[i][j] = new Pipe(timeFromUs(1));
+            pServerTor[i][j] = new Pipe(timeFromUs(LINK_DELAY));
             createQueue(qType, qServerTor[i][j], LEAF_SPEED, ENDH_BUFFER, logfile);
             qServerTor[i][j]->setName("qServerTor[" + to_string(i) + "][" + to_string(j) + "]");
             pServerTor[i][j]->setName("pServerTor[" + to_string(i) + "][" + to_string(j) + "]");
@@ -69,7 +71,7 @@ void buildTopology(string &qType, Logfile &logfile) {
             logfile.writeName(*(pServerTor[i][j]));
 
             // downlink
-            pTorServer[i][j] = new Pipe(timeFromUs(1));
+            pTorServer[i][j] = new Pipe(timeFromUs(LINK_DELAY));
             createQueue(qType, qTorServer[i][j], LEAF_SPEED, LEAF_BUFFER, logfile);
             qTorServer[i][j]->setName("qTorServer[" + to_string(i) + "][" + to_string(j) + "]");
             pTorServer[i][j]->setName("pTorServer[" + to_string(i) + "][" + to_string(j) + "]");
@@ -82,7 +84,7 @@ void buildTopology(string &qType, Logfile &logfile) {
     for (int i = 0; i < N_CORE; i++) {
         for (int j = 0; j < N_LEAF; j++) {
             // uplink
-            pTorCore[i][j] = new Pipe(timeFromUs(1));
+            pTorCore[i][j] = new Pipe(timeFromUs(LINK_DELAY));
             createQueue(qType, qTorCore[i][j], CORE_SPEED, LEAF_BUFFER, logfile);
             qTorCore[i][j]->setName("qTorCore[" + to_string(i) + "][" + to_string(j) + "]");
             pTorCore[i][j]->setName("pTorCore[" + to_string(i) + "][" + to_string(j) + "]");
@@ -90,7 +92,7 @@ void buildTopology(string &qType, Logfile &logfile) {
             logfile.writeName(*(pTorCore[i][j]));
 
             // downlink
-            pCoreTor[i][j] = new Pipe(timeFromUs(1));
+            pCoreTor[i][j] = new Pipe(timeFromUs(LINK_DELAY));
             createQueue(qType, qCoreTor[i][j], CORE_SPEED, CORE_BUFFER, logfile);
             qCoreTor[i][j]->setName("qCoreTor[" + to_string(i) + "][" + to_string(j) + "]");
             pCoreTor[i][j]->setName("pCoreTor[" + to_string(i) + "][" + to_string(j) + "]");
@@ -99,7 +101,6 @@ void buildTopology(string &qType, Logfile &logfile) {
 
         }
     }
-
 }
 
 Workloads::FlowDist getFlowDist(string &FlowDist) {
@@ -122,18 +123,18 @@ conga_testbed(const ArgList &args, Logfile &logfile)
 {
     // testbed definition
     uint32_t Duration = 2;
-    double Utilization = 0.9;
+    double Utilization = 0.1;
     uint32_t AvgFlowSize = 100000;
-    uint32_t Lstf = 0;
+    // uint32_t Lstf = 0;
     string QueueType = "droptail";
-    string EndHost = "dctcp";
+    string EndHost = "tcp";
     string calq = "cq";
     string fairqueue = "fq";
     string FlowDist = "uniform";
 
     parseInt(args, "duration", Duration);
     parseInt(args, "flowsize", AvgFlowSize);
-    parseInt(args, "lstf", Lstf);
+    // parseInt(args, "lstf", Lstf);
     parseDouble(args, "utilization", Utilization);
     parseString(args, "queue", QueueType);
     parseString(args, "endhost", EndHost);
@@ -142,10 +143,10 @@ conga_testbed(const ArgList &args, Logfile &logfile)
 
     buildTopology(QueueType, logfile);
     cout << "Topology built" << endl;
-    DataSource::EndHost eh = DataSource::TCP;
 
+    DataSource::EndHost eh = DataSource::TCP;
     Workloads::FlowDist flowDist = getFlowDist(FlowDist);
-    double flow_rate = (LEAF_SPEED / 1e4) * Utilization; // TODO: Set to a reasonable value
+    double flow_rate = Utilization * (CORE_SPEED * N_CORE * N_LEAF);
 
     cout << "Starting flow generation" << endl;
 
@@ -200,13 +201,15 @@ void conga::createPath(vector<uint32_t>& path, route_t* &route) { // path: {srv,
     route->push_back(qServerTor[srcToR][srcSrv]);
     route->push_back(pServerTor[srcToR][srcSrv]);
 
-    // tor --> core
-    route->push_back(qTorCore[core][srcToR]);
-    route->push_back(pTorCore[core][srcToR]);
+    if(srcToR != dstToR) {
+        // tor --> core
+        route->push_back(qTorCore[core][srcToR]);
+        route->push_back(pTorCore[core][srcToR]);
 
-    // core --> tor
-    route->push_back(qCoreTor[core][dstToR]);
-    route->push_back(pCoreTor[core][dstToR]);
+        // core --> tor
+        route->push_back(qCoreTor[core][dstToR]);
+        route->push_back(pCoreTor[core][dstToR]);
+    }
 
     // tor --> srv
     route->push_back(qTorServer[dstToR][dstSrv]);

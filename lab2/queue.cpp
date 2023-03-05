@@ -103,14 +103,15 @@ Queue::printStats()
         counts[fid] = counts[fid] + 1;
     }
 
-#if MING_PROF
-    cout << str() << " " << timeAsUs(EventList::Get().now()) << " stats";
-#else
-    cout << str() << " " << timeAsMs(EventList::Get().now()) << " stats";
-#endif
-
-    for (auto it = counts.begin(); it != counts.end(); it++) {
-        cout << " " << it->first << "->" << it->second;
+    if(DEBUG_HTSIM) {
+    #if MING_PROF
+        cout << str() << " " << timeAsUs(EventList::Get().now()) << " stats";
+    #else
+        cout << str() << " " << timeAsMs(EventList::Get().now()) << " stats";
+    #endif
+        for (auto it = counts.begin(); it != counts.end(); it++) {
+            cout << " " << it->first << "->" << it->second;
+        }
+        cout << endl;
     }
-    cout << endl;
 }
