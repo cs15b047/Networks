@@ -2,4 +2,4 @@ htsim
 .d/
 .obj/
 data/*
-
+*.log

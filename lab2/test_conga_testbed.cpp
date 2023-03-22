@@ -45,13 +45,15 @@ namespace conga {
     Pipe  *pCoreTor[N_CORE][N_LEAF];
     Queue *qCoreTor[N_CORE][N_LEAF];
 
-    // Leafswitch *leafswitches[N_LEAF];
+    hash<string> hash_fn;
+
+    Leafswitch *leafswitches[N_LEAF];
 
 
     void createPath(vector<uint32_t>& path, route_t* &route);
 
     void generateRandomRoute(route_t *&fwd, route_t *&rev, uint32_t &src, uint32_t &dst);
-    void createQueue(string &qType, Queue *&queue, uint64_t speed, uint64_t buffer, Logfile &logfile);
+    void createQueue(string &qType, Queue *&queue, uint64_t speed, uint64_t buffer, Logfile &logfile, Queue::QueueLocation location = Queue::QueueLocation::SRV_TOR, Leafswitch *leafswitch = NULL);
 
 }
 
@@ -59,12 +61,17 @@ using namespace conga;
 
 
 void buildTopology(string &qType, Logfile &logfile) {
+    // Create leaf switches
+    for (int i = 0; i < N_LEAF; i++) {
+        leafswitches[i] = new Leafswitch(i, N_LEAF, N_CORE);
+    }
+
     // Server <--> ToR
     for (int i = 0; i < N_LEAF; i++) {
         for (int j = 0; j < N_SERVER; j++) {
             // uplink
             pServerTor[i][j] = new Pipe(timeFromUs(LINK_DELAY));
-            createQueue(qType, qServerTor[i][j], LEAF_SPEED, ENDH_BUFFER, logfile);
+            createQueue(qType, qServerTor[i][j], LEAF_SPEED, ENDH_BUFFER, logfile, Queue::QueueLocation::SRV_TOR);
             qServerTor[i][j]->setName("qServerTor[" + to_string(i) + "][" + to_string(j) + "]");
             pServerTor[i][j]->setName("pServerTor[" + to_string(i) + "][" + to_string(j) + "]");
             logfile.writeName(*(qServerTor[i][j]));
@@ -72,7 +79,7 @@ void buildTopology(string &qType, Logfile &logfile) {
 
             // downlink
             pTorServer[i][j] = new Pipe(timeFromUs(LINK_DELAY));
-            createQueue(qType, qTorServer[i][j], LEAF_SPEED, LEAF_BUFFER, logfile);
+            createQueue(qType, qTorServer[i][j], LEAF_SPEED, LEAF_BUFFER, logfile, Queue::QueueLocation::TOR_SRV, leafswitches[i]);
             qTorServer[i][j]->setName("qTorServer[" + to_string(i) + "][" + to_string(j) + "]");
             pTorServer[i][j]->setName("pTorServer[" + to_string(i) + "][" + to_string(j) + "]");
             logfile.writeName(*(qTorServer[i][j]));
@@ -85,7 +92,7 @@ void buildTopology(string &qType, Logfile &logfile) {
         for (int j = 0; j < N_LEAF; j++) {
             // uplink
             pTorCore[i][j] = new Pipe(timeFromUs(LINK_DELAY));
-            createQueue(qType, qTorCore[i][j], CORE_SPEED, LEAF_BUFFER, logfile);
+            createQueue(qType, qTorCore[i][j], CORE_SPEED, LEAF_BUFFER, logfile, Queue::QueueLocation::TOR_CORE, leafswitches[j]);
             qTorCore[i][j]->setName("qTorCore[" + to_string(i) + "][" + to_string(j) + "]");
             pTorCore[i][j]->setName("pTorCore[" + to_string(i) + "][" + to_string(j) + "]");
             logfile.writeName(*(qTorCore[i][j]));
@@ -93,7 +100,7 @@ void buildTopology(string &qType, Logfile &logfile) {
 
             // downlink
             pCoreTor[i][j] = new Pipe(timeFromUs(LINK_DELAY));
-            createQueue(qType, qCoreTor[i][j], CORE_SPEED, CORE_BUFFER, logfile);
+            createQueue(qType, qCoreTor[i][j], CORE_SPEED, CORE_BUFFER, logfile, Queue::QueueLocation::CORE_TOR);
             qCoreTor[i][j]->setName("qCoreTor[" + to_string(i) + "][" + to_string(j) + "]");
             pCoreTor[i][j]->setName("pCoreTor[" + to_string(i) + "][" + to_string(j) + "]");
             logfile.writeName(*(qCoreTor[i][j]));
@@ -122,7 +129,7 @@ void
 conga_testbed(const ArgList &args, Logfile &logfile)
 {
     // testbed definition
-    uint32_t Duration = 2;
+    uint32_t Duration = 1;
     double Utilization = 0.1;
     uint32_t AvgFlowSize = 100000;
     // uint32_t Lstf = 0;
@@ -163,7 +170,9 @@ conga::createQueue(string &qType,
                       Queue *&queue,
                       uint64_t speed,
                       uint64_t buffer,
-                      Logfile &logfile)
+                      Logfile &logfile,
+                      Queue::QueueLocation location,
+                      Leafswitch* leafswitch)
 {
 #if MING_PROF
     QueueLoggerSampling *qs = new QueueLoggerSampling(timeFromUs(100));
@@ -185,6 +194,9 @@ conga::createQueue(string &qType,
     } else {
         queue = new Queue(speed, buffer, qs);
     }
+
+    queue->_location = location;
+    queue->_leafswitch = leafswitch;
 }
 
 
@@ -229,7 +241,21 @@ void conga::generateRandomRoute(route_t *&fwd, route_t *&rev, uint32_t &src, uin
     uint32_t dstToR = dst / N_SERVER;
 
     // Choose a random core switch --> ECMP?
-    uint32_t core = rand() % N_CORE;
+    uint32_t ecmp_choice = hash_fn(to_string(src) + to_string(dst)) % N_CORE;
+
+    uint32_t conga_choice = INT_MAX;
+    double min_ce = __DBL_MAX__;
+    for(uint32_t i = 0; i < N_CORE; i++) {
+        double ce = leafswitches[srcToR]->congestion_to_table[dstToR][i];
+        if(ce < min_ce) {
+            conga_choice = i;
+            min_ce = ce;
+        }
+    }
+
+    assert(conga_choice != INT_MAX); // something is picked!
+
+    uint32_t core = conga_choice;
 
     fwd = new route_t();
     rev = new route_t();
@@ -239,4 +265,12 @@ void conga::generateRandomRoute(route_t *&fwd, route_t *&rev, uint32_t &src, uin
 
     createPath(path, fwd);
     createPath(revPath, rev);
+
+    for(auto& hop: *fwd) {
+        hop->pkt_route = path;
+    }
+
+    for(auto& hop: *rev) {
+        hop->pkt_route = revPath;
+    }
 }

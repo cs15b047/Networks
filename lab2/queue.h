@@ -7,14 +7,18 @@
 #include "eventlist.h"
 #include "network.h"
 #include "loggertypes.h"
+#include "leafswitch.h"
 
 #include <list>
 
 class Queue : public EventSource, public PacketSink
 {
     public:
+        enum QueueLocation { SRV_TOR, TOR_CORE, CORE_TOR, TOR_SRV };
         Queue(linkspeed_bps bitrate, mem_b maxsize, QueueLogger *logger);
         void doNextEvent();
+        void handle_packet(Packet *pkt);
+        void update_link_util(Packet *pkt);
         virtual void receivePacket(Packet &pkt);
         virtual void printStats();
 
@@ -38,6 +42,13 @@ class Queue : public EventSource, public PacketSink
 
         mem_b _maxsize;   // Maximum queue size.
         mem_b _queuesize; // Current queue size.
+        QueueLocation _location;
+        Leafswitch *_leafswitch;
+        double link_util;
+        int64_t prev_time = 0;
+        const double tau = 160; // usec
+        const double alpha = 0.1; // TODO: Set this Knob
+        const int64_t T_DRE = tau * alpha;
 
     protected:
         // Start serving the item at the head of the queue.

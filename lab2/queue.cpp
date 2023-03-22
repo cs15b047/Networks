@@ -25,12 +25,64 @@ Queue::beginService()
     EventList::Get().sourceIsPendingRel(*this, drainTime(_enqueued.back()));
 }
 
+void Queue::handle_packet(Packet* pkt) {
+    update_link_util(pkt);
+
+    vector<uint32_t> path = pkt->_route->at(0)->pkt_route; // all elements store the entire path
+    
+    uint32_t srcTor = path[1], core = path[2], dstTor = path[3];
+    // Src and dst ToR are the same --> don't process
+    if(srcTor == dstTor) {
+        return;
+    }
+    
+    switch (_location) {
+    case SRV_TOR:
+        break;
+    case TOR_CORE:
+        // set ce and metric
+        pkt->ce = _leafswitch->congestion_to_table[dstTor][core];
+        pkt->metric = _leafswitch->congestion_from_table[dstTor][core];
+
+        pkt->ce = max(pkt->ce, link_util);
+        break;
+    case CORE_TOR:
+        pkt->ce = max(pkt->ce, link_util);
+        break;
+    case TOR_SRV:
+        _leafswitch->congestion_from_table[srcTor][core] = pkt->ce;
+        _leafswitch->congestion_to_table[srcTor][core] = pkt->metric;
+        break;
+    default:
+        break;
+    }
+}
+
+
+// link utilization using discounting rate estimation
+void Queue::update_link_util(Packet* pkt) {
+    int64_t now = timeAsUs(EventList::Get().now()) ;
+    uint32_t exp_decay = (now - prev_time) / T_DRE;
+    double decay_factor = pow((1- alpha), exp_decay);
+
+    link_util += (double)pkt->size();
+
+    if(exp_decay > 0) {
+        link_util = link_util * decay_factor;
+    }
+
+    prev_time = now;
+}
+
 void
 Queue::completeService()
 {
     assert(!_enqueued.empty());
 
     Packet *pkt = _enqueued.back();
+
+    handle_packet(pkt);
+
     _enqueued.pop_back();
     _queuesize -= pkt->size();
 
