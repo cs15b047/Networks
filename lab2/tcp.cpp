@@ -90,15 +90,16 @@ TcpSrc::doNextEvent()
 
     // Retransmission timeout.
     else if (_RFC2988_RTO_timeout != 0 && current_ts >= _RFC2988_RTO_timeout) {
-
-        cout << str() << " at " << timeAsMs(current_ts)
-             << " RTO " << timeAsUs(_rto)
-             << " MDEV " << timeAsUs(_mdev)
-             << " RTT "<< timeAsUs(_rtt)
-             << " SEQ " << _last_acked / MSS_BYTES
-             << " CWND "<< _cwnd / MSS_BYTES
-             << " RTO_timeout " << timeAsMs(_RFC2988_RTO_timeout)
-             << " STATE " << _state << endl;
+        if(DEBUG_HTSIM) {
+            cout << str() << " at " << timeAsMs(current_ts)
+                << " RTO " << timeAsUs(_rto)
+                << " MDEV " << timeAsUs(_mdev)
+                << " RTT "<< timeAsUs(_rtt)
+                << " SEQ " << _last_acked / MSS_BYTES
+                << " CWND "<< _cwnd / MSS_BYTES
+                << " RTO_timeout " << timeAsMs(_RFC2988_RTO_timeout)
+                << " STATE " << _state << endl;
+        }
 
         if (_logger) _logger->logTcp(*this, TcpLogger::TCP_TIMEOUT);
 
@@ -154,14 +155,16 @@ TcpSrc::receivePacket(Packet &pkt)
         _state = FINISH;
 
         // Ming added _flowsize
-        cout << setprecision(6) << "Flow " << str() << " " << id << " size " << _flowsize
-             << " start " << lround(timeAsUs(_start_time)) << " end " << lround(timeAsUs(current_ts))
-             << " fct " << timeAsUs(current_ts - _start_time)
-             << " sent " << _highest_sent << " " << _packets_sent - _highest_sent
-             << " tput " << _flowsize * 8000.0 / (current_ts - _start_time)
-             << " rtt " << timeAsUs(_rtt)
-             << " cwnd " << _cwnd
-             << " alpha " << _alpha << endl;
+        if(DEBUG_HTSIM) {
+            cout << setprecision(6) << "Flow " << str() << " " << id << " size " << _flowsize
+                << " start " << lround(timeAsUs(_start_time)) << " end " << lround(timeAsUs(current_ts))
+                << " fct " << timeAsUs(current_ts - _start_time)
+                << " sent " << _highest_sent << " " << _packets_sent - _highest_sent
+                << " tput " << _flowsize * 8000.0 / (current_ts - _start_time)
+                << " rtt " << timeAsUs(_rtt)
+                << " cwnd " << _cwnd
+                << " alpha " << _alpha << endl;
+        }
 
         return;
     }
