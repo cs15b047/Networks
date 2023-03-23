@@ -44,13 +44,11 @@ if __name__ == '__main__':
 
     avg_fct_ms, num_flows, total_size, utilization = parse_file(input_file)
     avg_fct_ms = avg_fct_ms / 1000
-    print("Average FCT: %.2f ms" % avg_fct_ms)
-    print("Number of flows: %d" % num_flows)
-    print("Total size: %.2f MB" % (total_size / 1000000))
+    total_size_mb = total_size / 1000000
 
     # write avg_fct_ms and utilization to output file as csv
     with open(output_file, 'a') as f:
-        f.write("%s,%.2f\n" % (utilization, avg_fct_ms))
+        f.write("%s,%.2f,%s,%.2f\n" % (utilization, avg_fct_ms, num_flows, total_size_mb))
 
     print("Wrote results to %s" % output_file)
 
