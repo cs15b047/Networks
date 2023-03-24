@@ -49,6 +49,7 @@ namespace conga {
 
     Leafswitch *leafswitches[N_LEAF];
 
+    string routing_algo;
 
     void createPath(vector<uint32_t>& path, route_t* &route);
 
@@ -146,6 +147,7 @@ conga_testbed(const ArgList &args, Logfile &logfile)
     parseString(args, "queue", QueueType);
     parseString(args, "endhost", EndHost);
     parseString(args, "flowdist", FlowDist);
+    parseString(args, "algorithm", routing_algo);
 
 
     buildTopology(QueueType, logfile);
@@ -255,7 +257,14 @@ void conga::generateRandomRoute(route_t *&fwd, route_t *&rev, uint32_t &src, uin
 
     assert(conga_choice != INT_MAX); // something is picked!
 
-    uint32_t core = conga_choice;
+    uint32_t core = -1;
+    if(routing_algo == "ecmp") {
+        core = ecmp_choice;
+    } else if(routing_algo == "conga") {
+        core = conga_choice;
+    } else {
+        assert(false);
+    }
 
     fwd = new route_t();
     rev = new route_t();

@@ -16,3 +16,5 @@ do
     echo "Parsing $file"
     python parse_results.py $file $RESULTS_DIR
 done
+
+echo "Parsing finished. Results are in '$RESULTS_DIR' directory."
