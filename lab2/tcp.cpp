@@ -52,6 +52,7 @@ TcpSrc::printStatus()
         estimated_fct = 0;
     }
 
+    if(DEBUG_HTSIM) {
     cout << setprecision(6) << "LiveFlow " << str() << " size " << _flowsize
          << " start " << lround(timeAsUs(_start_time))
          << " endBytes " << _last_acked
@@ -60,6 +61,7 @@ TcpSrc::printStatus()
          << " rate " << _last_acked * 8000.0 / (current_ts - _start_time)
          << " cwnd " << _cwnd
          << " alpha " << _alpha << endl;
+    }
 }
 
 void
@@ -155,7 +157,7 @@ TcpSrc::receivePacket(Packet &pkt)
         _state = FINISH;
 
         // Ming added _flowsize
-        if(DEBUG_HTSIM) {
+        // if(DEBUG_HTSIM) {
             cout << setprecision(6) << "Flow " << str() << " " << id << " size " << _flowsize
                 << " start " << lround(timeAsUs(_start_time)) << " end " << lround(timeAsUs(current_ts))
                 << " fct " << timeAsUs(current_ts - _start_time)
@@ -164,7 +166,7 @@ TcpSrc::receivePacket(Packet &pkt)
                 << " rtt " << timeAsUs(_rtt)
                 << " cwnd " << _cwnd
                 << " alpha " << _alpha << endl;
-        }
+        // }
 
         return;
     }

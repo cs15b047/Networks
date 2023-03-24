@@ -161,9 +161,9 @@ conga_testbed(const ArgList &args, Logfile &logfile)
 
     // generate flows
     FlowGenerator *bgFlowGen = new FlowGenerator(eh, generateRandomRoute, flow_rate, AvgFlowSize, flowDist);
-    bgFlowGen->setTimeLimits(timeFromUs(1), timeFromSec(Duration) - 1);
+    bgFlowGen->setTimeLimits(timeFromUs(1), timeFromMs(Duration) - 1);
     
-    EventList::Get().setEndtime(timeFromSec(Duration));
+    EventList::Get().setEndtime(timeFromMs(Duration));
 }
 
 
@@ -242,25 +242,21 @@ void conga::generateRandomRoute(route_t *&fwd, route_t *&rev, uint32_t &src, uin
     uint32_t srcToR = src / N_SERVER;
     uint32_t dstToR = dst / N_SERVER;
 
-    // Choose a random core switch --> ECMP?
-    uint32_t ecmp_choice = hash_fn(to_string(src) + to_string(dst)) % N_CORE;
-
-    uint32_t conga_choice = INT_MAX;
-    double min_ce = __DBL_MAX__;
-    for(uint32_t i = 0; i < N_CORE; i++) {
-        double ce = leafswitches[srcToR]->congestion_to_table[dstToR][i];
-        if(ce < min_ce) {
-            conga_choice = i;
-            min_ce = ce;
-        }
-    }
-
-    assert(conga_choice != INT_MAX); // something is picked!
-
     uint32_t core = -1;
     if(routing_algo == "ecmp") {
+        uint32_t ecmp_choice = hash_fn(to_string(src) + to_string(dst)) % N_CORE;
         core = ecmp_choice;
     } else if(routing_algo == "conga") {
+        uint32_t conga_choice = INT_MAX;
+        double min_ce = __DBL_MAX__;
+        for(uint32_t i = 0; i < N_CORE; i++) {
+            double ce = leafswitches[srcToR]->congestion_to_table[dstToR][i];
+            if(ce < min_ce) {
+                conga_choice = i;
+                min_ce = ce;
+            }
+        }
+        assert(conga_choice != INT_MAX); // something is picked!
         core = conga_choice;
     } else {
         assert(false);

@@ -2,11 +2,11 @@
 
 CURRENT_TIMESTAMP=$(date +%s)
 LOG_DIR=logs/ts-$CURRENT_TIMESTAMP
-FLOW_DISTS=("enterprise" "datamining")
-ALGOS=("conga")
+FLOW_DISTS=("uniform" "pareto")
+ALGOS=("ecmp")
 UTIL_START=0.1
 UTIL_END=1.0
-FLOW_SIZE=10000000
+FLOW_SIZE=50000
 
 
 echo "Compiling htsim..."
