@@ -1,0 +1,18 @@
+ajsj7598,sarthi
+
+Assumptions:
+1. Packets processed at egress queues are used to calculate link utilization instead of ingress.
+2. Both To and From tables are updated when a packet is recieved at destination tor.
+3. ECMP hashing is computed using hash_fn(src || dst) to have a deterministic value. 
+
+
+Steps:
+To run the experiment (modify the flow distribution)
+```
+./runner.sh
+```
+
+Once the experiments are finished, to parse the generated logs (for result calculation)
+```
+./parse_results.sh <log dir> <result dir>
+```

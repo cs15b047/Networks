@@ -2,7 +2,7 @@
 
 CURRENT_TIMESTAMP=$(date +%s)
 LOG_DIR=logs/ts-$CURRENT_TIMESTAMP
-FLOW_DISTS=("uniform" "pareto")
+FLOW_DISTS=("datamining" "enterprise")  # ("uniform" "pareto")
 ALGOS=("ecmp" "conga")
 UTIL_START=0.1
 UTIL_END=1.0
@@ -24,12 +24,10 @@ for flowdist in ${FLOW_DISTS[@]}
 do
     for utilization in $(seq $UTIL_START 0.1 $UTIL_END)
     do
-        # TODO: Put loop over (conga, ecmp)
         for algo in ${ALGOS[@]}
         do
             LOGFILE=$LOG_DIR/flow=$flowdist-size=$FLOW_SIZE-util=$utilization-algo=$algo.log
             echo "Started experiment for flow distribution: $flowdist, utilization: $utilization, flow size: $FLOW_SIZE, algorithm: $algo"
-            # TODO: Add algorithm as conga as well
             ./htsim --expt=2 --utilization=$utilization --flowsize=$FLOW_SIZE --flowdist=$flowdist --algorithm=$algo --duration=$duration_ms > $LOGFILE 2>&1 &
         done
     done
