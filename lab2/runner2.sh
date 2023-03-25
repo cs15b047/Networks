@@ -2,7 +2,7 @@
 
 CURRENT_TIMESTAMP=$(date +%s)
 LOG_DIR=logs/ts-$CURRENT_TIMESTAMP
-FLOW_DISTS=("uniform" "pareto")
+FLOW_DISTS=("uniform")
 ALGOS=("conga")
 UTIL_START=0.1
 UTIL_END=1.0

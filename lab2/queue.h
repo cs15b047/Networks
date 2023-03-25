@@ -47,7 +47,7 @@ class Queue : public EventSource, public PacketSink
         double link_util;
         int64_t prev_time = 0;
         const double tau = 160; // usec
-        const double alpha = 0.1; // TODO: Set this Knob
+        const double alpha = 0.5; // TODO: Set this Knob
         const int64_t T_DRE = tau * alpha;
 
     protected:

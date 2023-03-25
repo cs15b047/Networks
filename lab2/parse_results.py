@@ -1,16 +1,6 @@
 import sys
 import os
-import matplotlib.pyplot as plt
 
-
-def plot_fct(fct_list, size_list, file_name):
-    plt.hist(fct_list, bins=10000)
-    plt.xlabel("Flow size (bytes)")
-    plt.ylabel("Flow completion time (ms)")
-    plt.title("Flow completion time vs. flow size")
-    file_name_without_extension = file_name.split(".")[0]
-    plt.savefig(file_name_without_extension + "_hist.png")
- 
 # function to parse file and check if string 'LiveFlow' is present
 def parse_file(file_name):
     total_fct = 0

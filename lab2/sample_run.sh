@@ -2,9 +2,9 @@ make > /dev/null
 
 utilization=0.9
 FLOW_SIZE=10000000
-flowdist="datamining"
-ALGOS=("ecmp" "conga")
-duration_ms=2000
+flowdist="uniform"
+ALGOS=("conga" "ecmp")
+duration_ms=100
 TS=`date +%s`
 LOG_DIR=logs/ts-$TS
 mkdir -p $LOG_DIR
