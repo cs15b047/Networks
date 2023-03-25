@@ -1,6 +1,16 @@
 import sys
 import os
+import matplotlib.pyplot as plt
 
+
+def plot_fct(fct_list, size_list, file_name):
+    plt.hist(fct_list, bins=10000)
+    plt.xlabel("Flow size (bytes)")
+    plt.ylabel("Flow completion time (ms)")
+    plt.title("Flow completion time vs. flow size")
+    file_name_without_extension = file_name.split(".")[0]
+    plt.savefig(file_name_without_extension + "_hist.png")
+ 
 # function to parse file and check if string 'LiveFlow' is present
 def parse_file(file_name):
     total_fct = 0
@@ -10,6 +20,9 @@ def parse_file(file_name):
     total_fct_under_100kb, total_fct_over_10mb = 0, 0
     num_flows_under_100kb, num_flows_over_10mb = 0, 0
     fct_under_100kb_list, fct_over_10mb_list = [], []
+    
+    # fct_list = []
+    # size_list = []
 
     try:
         with open(file_name, 'r') as f:
@@ -37,6 +50,8 @@ def parse_file(file_name):
 
                     total_size += size
                     num_flows += 1
+                    # fct_list.append(fct)
+                    # size_list.append(size)
     except IOError:
         print("Error: File %s does not appear to exist." % file_name)
         sys.exit(1)
@@ -54,6 +69,8 @@ def parse_file(file_name):
 
     avg_fct_under_100kb_ms, avg_fct_over_10mb_ms = avg_fct_under_100kb / 1000, avg_fct_over_10mb / 1000
     total_size_mb = total_size / 1000000
+
+    # plot_fct(fct_list, size_list, file_name)
     return utilization, avg_fct_under_100kb_ms, avg_fct_over_10mb_ms, num_flows_under_100kb, num_flows_over_10mb, num_flows, total_size_mb
 
 
@@ -88,5 +105,7 @@ if __name__ == '__main__':
     except IOError:
         print("Error: File %s does not appear to exist." % output_file)
         sys.exit(1)
+    
+    print("Output file: %s" % output_file)
 
 

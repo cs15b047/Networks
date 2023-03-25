@@ -16,6 +16,7 @@ Queue::Queue(linkspeed_bps bitrate,
              _logger(logger)
 {
     _ps_per_byte = (simtime_picosec)(8 * 1000000000000UL / _bitrate);
+    link_util = 0;
 }
 
 void
@@ -45,13 +46,16 @@ void Queue::handle_packet(Packet* pkt) {
         pkt->metric = _leafswitch->congestion_from_table[dstTor][core];
 
         pkt->ce = max(pkt->ce, link_util);
+        // cout << "At TOR_CORE, for pkt_size: " << pkt->size() << " srcTor: " << srcTor << " dstTor: " << dstTor << " core: " << core << " ce: " << pkt->ce << " metric: " << pkt->metric << endl;
         break;
     case CORE_TOR:
         pkt->ce = max(pkt->ce, link_util);
+        // cout << "At CORE_TOR, for srcTor: " << srcTor << " dstTor: " << dstTor << " core: " << core << " ce: " << pkt->ce << " metric: " << pkt->metric << endl;
         break;
     case TOR_SRV:
         _leafswitch->congestion_from_table[srcTor][core] = pkt->ce;
         _leafswitch->congestion_to_table[srcTor][core] = pkt->metric;
+        // cout << "At TOR_SRV, for srcTor: " << srcTor << " dstTor: " << dstTor << " core: " << core << " ce: " << pkt->ce << " metric: " << pkt->metric << endl;
         break;
     default:
         break;

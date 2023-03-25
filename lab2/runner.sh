@@ -3,11 +3,11 @@
 CURRENT_TIMESTAMP=$(date +%s)
 LOG_DIR=logs/ts-$CURRENT_TIMESTAMP
 FLOW_DISTS=("enterprise" "datamining")
-ALGOS=("conga")
+ALGOS=("ecmp" "conga")
 UTIL_START=0.1
 UTIL_END=1.0
 FLOW_SIZE=10000000
-
+duration_ms=500
 
 echo "Compiling htsim..."
 make > /dev/null 
@@ -20,7 +20,6 @@ fi
 mkdir -p $LOG_DIR
 
 
-duration_ms=100
 for flowdist in ${FLOW_DISTS[@]}
 do
     for utilization in $(seq $UTIL_START 0.1 $UTIL_END)

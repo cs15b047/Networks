@@ -19,6 +19,7 @@ namespace conga {
     const int N_CORE = 12;
     const int N_LEAF = 24;
     const int N_SERVER = 32;   // Per leaf
+    const int N_NODES = N_SERVER * N_LEAF;
 
     const uint64_t LEAF_BUFFER = 512000;
     const uint64_t CORE_BUFFER = 1024000;
@@ -233,8 +234,24 @@ void conga::createPath(vector<uint32_t>& path, route_t* &route) { // path: {srv,
 
 void conga::generateRandomRoute(route_t *&fwd, route_t *&rev, uint32_t &src, uint32_t &dst) {
     // generate random route
-    src = rand() % (N_SERVER * N_LEAF);
-    dst = rand() % (N_SERVER * N_LEAF);
+    src = rand() % N_NODES;
+    dst = rand() % N_NODES;
+
+    // if (dst != 0) {
+    //     dst = dst % N_NODES;
+    // } else {
+    //     dst = rand() % N_NODES;
+    // }
+
+    // if (src != 0) {
+    //     src = src % (N_NODES - 1);
+    // } else {
+    //     src = rand() % (N_NODES - 1);
+    // }
+
+    // if (src >= dst) {
+    //     src++;
+    // }
 
 
     uint32_t srcSrv = src % N_SERVER;
@@ -246,16 +263,27 @@ void conga::generateRandomRoute(route_t *&fwd, route_t *&rev, uint32_t &src, uin
     if(routing_algo == "ecmp") {
         uint32_t ecmp_choice = hash_fn(to_string(src) + to_string(dst)) % N_CORE;
         core = ecmp_choice;
+        // cout << "ecmp_choice: " << ecmp_choice << endl;
     } else if(routing_algo == "conga") {
         uint32_t conga_choice = INT_MAX;
         double min_ce = __DBL_MAX__;
+        vector<uint32_t> min_choices;
         for(uint32_t i = 0; i < N_CORE; i++) {
             double ce = leafswitches[srcToR]->congestion_to_table[dstToR][i];
+
             if(ce < min_ce) {
                 conga_choice = i;
                 min_ce = ce;
+                min_choices = {i};
+            } else if (ce == min_ce) {
+                min_choices.push_back(i);
             }
         }
+
+        uint32_t ecmp_choice_idx = hash_fn(to_string(src) + to_string(dst)) % min_choices.size();
+        conga_choice = min_choices[ecmp_choice_idx];
+
+        // cout << "conga_choice: " << conga_choice << ", min CE: " << min_ce << endl;
         assert(conga_choice != INT_MAX); // something is picked!
         core = conga_choice;
     } else {
