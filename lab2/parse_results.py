@@ -40,6 +40,7 @@ def parse_file(file_name):
 
                     total_size += size
                     num_flows += 1
+                    total_fct += fct
                     # fct_list.append(fct)
                     # size_list.append(size)
     except IOError:
@@ -57,11 +58,17 @@ def parse_file(file_name):
     else:
         avg_fct_over_10mb = total_fct_over_10mb / num_flows_over_10mb
 
+    if num_flows == 0:
+        avg_fct = 0
+    else:
+        avg_fct = total_fct / num_flows
+
     avg_fct_under_100kb_ms, avg_fct_over_10mb_ms = avg_fct_under_100kb / 1000, avg_fct_over_10mb / 1000
+    avg_fct_ms = avg_fct / 1000
     total_size_mb = total_size / 1000000
 
     # plot_fct(fct_list, size_list, file_name)
-    return utilization, avg_fct_under_100kb_ms, avg_fct_over_10mb_ms, num_flows_under_100kb, num_flows_over_10mb, num_flows, total_size_mb
+    return utilization, avg_fct_under_100kb_ms, avg_fct_over_10mb_ms, num_flows_under_100kb, num_flows_over_10mb, avg_fct_ms, num_flows 
 
 
 def get_output_file(input_file, output_dir):
@@ -87,11 +94,11 @@ if __name__ == '__main__':
     output_dir = sys.argv[2]
 
     output_file = get_output_file(input_file, output_dir)
-    utilization, avg_fct_under_100kb_ms, avg_fct_over_10mb_ms, num_flows_under_100kb, num_flows_over_10mb, num_flows, total_size_mb = parse_file(input_file)
+    utilization, avg_fct_under_100kb_ms, avg_fct_over_10mb_ms, num_flows_under_100kb, num_flows_over_10mb, avg_fct_ms, num_flows = parse_file(input_file)
     
     try:
         with open(output_file, 'a') as f:
-            f.write("%s,%.2f,%.2f,%s,%s,%s,%.2f,\n" % (utilization, avg_fct_under_100kb_ms, avg_fct_over_10mb_ms, num_flows_under_100kb, num_flows_over_10mb, num_flows, total_size_mb))
+            f.write("%s,%.2f,%.2f,%s,%s,%.2f,%s\n" % (utilization, avg_fct_under_100kb_ms, avg_fct_over_10mb_ms, num_flows_under_100kb, num_flows_over_10mb, avg_fct_ms, num_flows))
     except IOError:
         print("Error: File %s does not appear to exist." % output_file)
         sys.exit(1)

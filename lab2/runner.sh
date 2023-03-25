@@ -2,12 +2,12 @@
 
 CURRENT_TIMESTAMP=$(date +%s)
 LOG_DIR=logs/ts-$CURRENT_TIMESTAMP
-FLOW_DISTS=("enterprise" "datamining")
+FLOW_DISTS=("uniform" "pareto")
 ALGOS=("ecmp" "conga")
 UTIL_START=0.1
 UTIL_END=1.0
-FLOW_SIZE=10000000
-duration_ms=500
+FLOW_SIZE=50000
+duration_ms=100
 
 echo "Compiling htsim..."
 make > /dev/null 
@@ -33,11 +33,6 @@ do
             ./htsim --expt=2 --utilization=$utilization --flowsize=$FLOW_SIZE --flowdist=$flowdist --algorithm=$algo --duration=$duration_ms > $LOGFILE 2>&1 &
         done
     done
-done
-
-while pgrep htsim > /dev/null
-do
-    sleep 1
 done
 
 echo "Output logs are in $LOG_DIR"
