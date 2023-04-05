@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <rdma/rsocket.h>
+#include <sys/socket.h>
 #include <strings.h> // bzero()
 #include <arpa/inet.h> // inet_addr
 #include <sys/time.h> // gettimeofday
@@ -32,9 +32,9 @@ void func(int sockfd)
 		n = 0;
 		while ((buff[n++] = getchar()) != '\n')
 			;
-		rwrite(sockfd, buff, sizeof(buff));
+		write(sockfd, buff, sizeof(buff));
 		bzero(buff, sizeof(buff));
-		rread(sockfd, buff, sizeof(buff));
+		read(sockfd, buff, sizeof(buff));
 		printf("From Server : %s", buff);
 		if ((strncmp(buff, "exit", 4)) == 0) {
 			printf("Client Exit...\n");
@@ -60,8 +60,8 @@ void send_data(int sockfd) {
 		uint64_t start, end;
 
 		start = get_current_time();
-		ssize_t sent_bytes = rwrite(sockfd, buff, buffer_size);
-		int read_bytes = rread(sockfd, buff, buffer_size);
+		ssize_t sent_bytes = write(sockfd, buff, buffer_size);
+		int read_bytes = read(sockfd, buff, buffer_size);
 		end = get_current_time();
 		total_time += end - start;
 		total_bytes_sent += sent_bytes;
@@ -80,7 +80,7 @@ int main()
 	struct sockaddr_in servaddr, cli;
 
 	// socket create and verification
-	sockfd = rsocket(AF_INET, SOCK_STREAM, 0);
+	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd == -1) {
 		printf("socket creation failed...\n");
 		exit(0);
@@ -97,7 +97,7 @@ int main()
 	servaddr.sin_port = htons(PORT);
 
 	// connect the client socket to server socket
-	if (rconnect(sockfd, (SA*)&servaddr, sizeof(servaddr)) != 0) {
+	if (connect(sockfd, (SA*)&servaddr, sizeof(servaddr)) != 0) {
 		printf("connection with the server failed...\n");
 		exit(0);
 	}

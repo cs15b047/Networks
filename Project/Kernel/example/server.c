@@ -3,9 +3,11 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <rdma/rsocket.h>
+#include <sys/socket.h>
 #include <sys/time.h>
 #include <assert.h>
+#include <netinet/in.h> // struct sockaddr_in
+#include <stdint.h>
 
 #define PORT	 8080
 #define MAXLINE 32768
@@ -29,7 +31,7 @@ void func(int connfd)
 		bzero(buff, MAX);
 
 		// read the message from client and copy it in buffer
-		rread(connfd, buff, sizeof(buff));
+		read(connfd, buff, sizeof(buff));
 		// print buffer which contains the client contents
 		printf("From client: %s\t To client : ", buff);
 		bzero(buff, MAX);
@@ -39,7 +41,7 @@ void func(int connfd)
 			;
 
 		// and send that buffer to client
-		rwrite(connfd, buff, sizeof(buff));
+		write(connfd, buff, sizeof(buff));
 
 		// if msg contains "Exit" then server exit and chat ended.
 		if (strncmp("exit", buff, 4) == 0) {
@@ -60,9 +62,9 @@ void receive_data(int sockfd) {
 
 	while(1) {
 		start = get_current_time();
-		ssize_t read_bytes = rread(sockfd, buff, buffer_size);
+		ssize_t read_bytes = read(sockfd, buff, buffer_size);
 		// printf("Got %ld bytes of data\n", read_bytes);
-		ssize_t sent_bytes = rwrite(sockfd, ack, 4);
+		ssize_t sent_bytes = write(sockfd, ack, 4);
 		end = get_current_time();
 		assert(sent_bytes == 4);
 
@@ -78,7 +80,7 @@ int main()
 	struct sockaddr_in servaddr, cli;
 
 	// socket create and verification
-	sockfd = rsocket(AF_INET, SOCK_STREAM, 0);
+	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd == -1) {
 		printf("socket creation failed...\n");
 		exit(0);
@@ -93,7 +95,7 @@ int main()
 	servaddr.sin_port = htons(PORT);
 
 	// Binding newly created socket to given IP and verification
-	if ((rbind(sockfd, (SA*)&servaddr, sizeof(servaddr))) != 0) {
+	if ((bind(sockfd, (SA*)&servaddr, sizeof(servaddr))) != 0) {
 		printf("socket bind failed...\n");
 		exit(0);
 	}
@@ -101,7 +103,7 @@ int main()
 		printf("Socket successfully binded..\n");
 
 	// Now server is ready to listen and verification
-	if ((rlisten(sockfd, 5)) != 0) {
+	if ((listen(sockfd, 5)) != 0) {
 		printf("Listen failed...\n");
 		exit(0);
 	}
@@ -110,7 +112,7 @@ int main()
 	len = sizeof(cli);
 
 	// Accept the data packet from client and verification
-	connfd = raccept(sockfd, (SA*)&cli, &len);
+	connfd = accept(sockfd, (SA*)&cli, &len);
 	if (connfd < 0) {
 		printf("server accept failed...\n");
 		exit(0);
