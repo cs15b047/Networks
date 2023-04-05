@@ -4,11 +4,20 @@
 #include <unistd.h>
 #include <string.h>
 #include <rdma/rsocket.h>
+#include <sys/time.h>
+#include <assert.h>
 
 #define PORT	 8080
-#define MAXLINE 1024
+#define MAXLINE 32768
 #define MAX 80
 #define SA struct sockaddr
+
+uint64_t get_current_time() {
+	// use gettimeofday
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	return tv.tv_sec * 1000000 + tv.tv_usec;
+}
 
 // Function designed for chat between client and server.
 void func(int connfd)
@@ -37,6 +46,27 @@ void func(int connfd)
 			printf("Server Exit...\n");
 			break;
 		}
+	}
+}
+
+void receive_data(int sockfd) {
+	char *buff = calloc(MAXLINE, sizeof(char));
+	char ack[4] = "ack";
+	size_t buffer_size = MAXLINE * sizeof(char);
+	// receive data and send ack
+	uint64_t start, end;
+
+	uint64_t total_bytes_recvd = 0;
+
+	while(1) {
+		start = get_current_time();
+		ssize_t read_bytes = rread(sockfd, buff, buffer_size);
+		// printf("Got %ld bytes of data\n", read_bytes);
+		ssize_t sent_bytes = rwrite(sockfd, ack, 4);
+		end = get_current_time();
+		assert(sent_bytes == 4);
+
+		// printf("Got %ld bytes of data and sent back ack in %lu microseconds\n", read_bytes, end - start);
 	}
 }
 
@@ -89,7 +119,7 @@ int main()
 		printf("server accept the client...\n");
 
 	// Function for chatting between client and server
-	func(connfd);
+	receive_data(connfd);
 
 	// After chatting close the socket
 	close(sockfd);
