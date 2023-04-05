@@ -1,6 +1,6 @@
-ifname=ens1f0
+ifname=eno33
 FSTACK_DIR=/mnt/Work/f-stack
-
+vifname="veth0"
 echo 1024 | tee /sys/devices/system/node/node0/hugepages/hugepages-2048kB/nr_hugepages
 mount -t hugetlbfs nodev /mnt/huge
 echo 0 > /proc/sys/kernel/randomize_va_space
@@ -30,19 +30,22 @@ sed "s/#vlanstrip=1/vlanstrip=1/" -i ${FSTACK_DIR}/config.ini
 export FF_PATH=${FSTACK_DIR}
 
 
-ifconfig $ifname down
-python3 $FSTACK_DIR/dpdk/usertools/dpdk-devbind.py --bind=igb_uio $ifname
-cd $FSTACK_DIR
-./start.sh &
+# ifconfig $ifname down
+# python3 $FSTACK_DIR/dpdk/usertools/dpdk-devbind.py --bind=igb_uio $ifname
+# cd ${FSTACK_DIR}
+echo "Starting app"
+# ./start.sh &
 
-# start kni
-# sleep 2
-# echo $myaddr $mymask $mybc $myhw $mygw
 
-# modprobe dummy
-# ip link add $vifname type dummy
-# ip link show $vifname
-# ifconfig $vifname ${myaddr}  netmask ${mymask}  broadcast ${mybc} hw ether ${myhw}
-# ip link set dev $vifname up
+echo "Creating switch"
+vde_switch -s /tmp/switch1 -daemon
+vde_switch -tap $vifname -daemon
+vde_pcapplug -d eno33
+echo "ifconfig $vifname ${myaddr}  netmask ${mymask}  broadcast ${mybc} hw ether ${myhw} up"
+ifconfig $vifname ${myaddr}  netmask ${mymask}  broadcast ${mybc} hw ether ${myhw} up
+
+echo "Adding route"
 # route add -net 0.0.0.0 gw ${mygw} dev $vifname
-# echo 1 > /sys/class/net/$vifname/carrier # if `carrier=on` not set while `insmod rte_kni.ko`.
+echo 1 > /sys/class/net/$vifname/carrier # if `carrier=on` not set while `insmod rte_kni.ko`.
+
+
