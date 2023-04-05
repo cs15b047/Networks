@@ -7,7 +7,7 @@ fi
 
 IF_NAME=ens1f0
 FSTACK_DIR=/mnt/Work/f-stack
-CONF_FILE=/mnt/Work/Networks/Project/DPDK/example/config.ini
+CONF_FILE=/mnt/Work/Networks/Project/DPDK/app/config.ini
 
 echo 1024 | tee /sys/devices/system/node/node0/hugepages/hugepages-2048kB/nr_hugepages
 mount -t hugetlbfs nodev /mnt/huge

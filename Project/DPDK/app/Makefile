@@ -22,6 +22,8 @@ BUILDDIR=./build
 all: clean $(BUILDDIR)
 	cc ${CFLAGS} -o $(BUILDDIR)/${TARGET}_server server.c ${LIBS}
 	cc ${CFLAGS} -o $(BUILDDIR)/${TARGET}_client client.c ${LIBS}
+	cc ${CFLAGS} -o $(BUILDDIR)/${TARGET}_client_v2 client_v2.c ${LIBS}
+
 
 $(BUILDDIR):
 	mkdir $(BUILDDIR)
