@@ -31,6 +31,7 @@ int sockfd6;
 char ack[4] = "ack";
 
 void process_client(int clientfd) {
+    // TODO: change to calloc
     char buf[256];
     ssize_t readlen = ff_read(clientfd, buf, sizeof(buf));
     ssize_t writelen = ff_write(clientfd, ack, sizeof(ack) - 1);
