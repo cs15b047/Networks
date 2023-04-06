@@ -28,13 +28,12 @@ int sockfd;
 int sockfd6;
 #endif
 
-char html[] = "Hello from Server";
+char ack[4] = "ack";
 
 void process_client(int clientfd) {
     char buf[256];
     ssize_t readlen = ff_read(clientfd, buf, sizeof(buf));
-    printf("Received from Client: %s\n", buf);
-    ssize_t writelen = ff_write(clientfd, html, sizeof(html) - 1);
+    ssize_t writelen = ff_write(clientfd, ack, sizeof(ack) - 1);
     if (writelen < 0){
         printf("ff_write failed:%d, %s\n", errno,
             strerror(errno));
@@ -116,7 +115,7 @@ int main(int argc, char * argv[])
     struct sockaddr_in my_addr;
     bzero(&my_addr, sizeof(my_addr));
     my_addr.sin_family = AF_INET;
-    my_addr.sin_port = htons(PORT);
+    my_addr.sin_port = htons(SERV_PORT);
     my_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     int ret = ff_bind(sockfd, (struct linux_sockaddr *)&my_addr, sizeof(my_addr));

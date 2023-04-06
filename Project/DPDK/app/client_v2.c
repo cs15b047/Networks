@@ -82,8 +82,8 @@ int main(int argc, char * argv[])
     struct sockaddr_in server_sock;
     bzero(&server_sock,sizeof(server_sock));
     server_sock.sin_family = AF_INET;
-    server_sock.sin_port = htons(PORT);
-    inet_pton(AF_INET,ADDR,&(server_sock.sin_addr));
+    server_sock.sin_port = htons(SERV_PORT);
+    inet_pton(AF_INET,SERV_ADDR,&(server_sock.sin_addr));
 
     int ret = ff_connect(sockfd,(struct linux_sockaddr *)&server_sock,sizeof(server_sock));
     if (ret < 0 && errno != EINPROGRESS) {

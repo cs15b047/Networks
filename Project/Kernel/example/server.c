@@ -9,7 +9,8 @@
 #include <netinet/in.h> // struct sockaddr_in
 #include <stdint.h>
 
-#define PORT	 8080
+#include "utils.h"
+
 #define MAXLINE 32768
 #define MAX 80
 #define SA struct sockaddr
@@ -92,7 +93,7 @@ int main()
 	// assign IP, PORT
 	servaddr.sin_family = AF_INET;
 	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-	servaddr.sin_port = htons(PORT);
+	servaddr.sin_port = htons(SERV_PORT);
 
 	// Binding newly created socket to given IP and verification
 	if ((bind(sockfd, (SA*)&servaddr, sizeof(servaddr))) != 0) {

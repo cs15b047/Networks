@@ -9,10 +9,10 @@
 #include <sys/time.h> // gettimeofday
 #include <assert.h>
 
-#define PORT	 8080
+#include "utils.h"
+
 #define MAX 	 80
 #define MAXLINE 32768
-#define PORT 8080
 #define SA struct sockaddr
 
 uint64_t get_current_time() {
@@ -93,8 +93,8 @@ int main()
 
 	// assign IP, PORT
 	servaddr.sin_family = AF_INET;
-	servaddr.sin_addr.s_addr = inet_addr("128.110.217.58");
-	servaddr.sin_port = htons(PORT);
+	servaddr.sin_addr.s_addr = inet_addr(SERV_ADDR);
+	servaddr.sin_port = htons(SERV_PORT);
 
 	// connect the client socket to server socket
 	if (rconnect(sockfd, (SA*)&servaddr, sizeof(servaddr)) != 0) {
