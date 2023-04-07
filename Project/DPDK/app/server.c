@@ -15,7 +15,8 @@
 
 #include "utils.h"
 
-#define MAX_EVENTS 512
+#define MAX_EVENTS 51200
+#define MAXLINE 32
 
 /* kevent set */
 struct kevent kevSet;
@@ -28,17 +29,20 @@ int sockfd;
 int sockfd6;
 #endif
 
-char ack[4] = "ack";
-
+char ack[2] = "a";
+char *buf;
 void process_client(int clientfd) {
-    char buf[256];
+    // TODO: change to calloc
     ssize_t readlen = ff_read(clientfd, buf, sizeof(buf));
-    ssize_t writelen = ff_write(clientfd, ack, sizeof(ack) - 1);
+    if (readlen < 0){
+        printf("ff_read failed:%d, %s\n", errno,
+            strerror(errno));
+    }
+    ssize_t writelen = ff_write(clientfd, ack, sizeof(ack));
     if (writelen < 0){
         printf("ff_write failed:%d, %s\n", errno,
             strerror(errno));
-        ff_close(clientfd);
-    }
+    } 
 }
 
 int loop(void *arg)
@@ -69,7 +73,7 @@ int loop(void *arg)
                     printf("ff_accept failed:%d, %s\n", errno,
                         strerror(errno));
                     break;
-                }
+                } 
 
                 /* Add to event list */
                 EV_SET(&kevSet, nclientfd, EVFILT_READ, EV_ADD, 0, 0, NULL);
@@ -95,7 +99,7 @@ int loop(void *arg)
 int main(int argc, char * argv[])
 {
     ff_init(argc, argv);
-
+    buf = (char *)malloc(MAXLINE);
     kq = ff_kqueue();
     if (kq < 0) {
         printf("ff_kqueue failed, errno:%d, %s\n", errno, strerror(errno));

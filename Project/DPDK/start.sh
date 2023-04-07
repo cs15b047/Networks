@@ -21,7 +21,7 @@ conf=./app/config.ini
 bin=./app/build/fstack_server
 
 pushd /mnt/Work/Networks/Project/DPDK/app
-make > /dev/null 2>&1
+make > /dev/null
 rc=$?
 if [ $rc -ne 0 ]; then
     echo "make failed"
