@@ -15,10 +15,8 @@
 
 #include "utils.h"
 
-#define MAX_EVENTS 512
-#define MAX_POLL 10
-#define MAX 	 80
-#define MAXLINE 32768
+#define MAX_EVENTS 51200
+#define MAXLINE 32
 #define SA struct sockaddr
 
 uint64_t get_current_time() {
@@ -36,9 +34,13 @@ struct kevent events[MAX_EVENTS];
 int kq;
 int sockfd;
 
+uint64_t start, end;
+uint64_t total_time = 0, iters = 100, total_bytes_sent = 0, total_bytes_recv = 0;
+char *buff;
+char ack[2] = "a";
+
 void send_data(int sockfd) {
-	char *buff = calloc(MAXLINE, sizeof(char));
-	size_t buffer_size = MAXLINE * sizeof(char);
+    int buffer_size = MAXLINE;
 	// set data
 	bzero(buff, buffer_size);
 	for (int i = 0; i < buffer_size; i++) {
@@ -46,25 +48,16 @@ void send_data(int sockfd) {
 	}
 	buff[buffer_size - 1] = '\0';
 
-	uint64_t total_time = 0, iters = 1024 * 10, total_bytes_sent = 0;
+    start = get_current_time();
 
 	for(int i = 0; i < iters; i++) {
 		// send data
-		uint64_t start, end;
-
-		start = get_current_time();
 		ssize_t sent_bytes = ff_write(sockfd, buff, buffer_size);
-		int read_bytes = ff_read(sockfd, buff, buffer_size);
-		end = get_current_time();
-		total_time += end - start;
-		total_bytes_sent += buffer_size;
-		// assert(read_bytes == 4);
-		// assert(strcmp(buff, "ack\0") == 0);
-		// printf("Sent + ack time: %lu\n", end - start);
+		total_bytes_sent += sent_bytes;
+         // add read event
+        EV_SET(&kevSet, sockfd, EVFILT_READ, EV_ADD, 0, 0, NULL);
+        ff_kevent(kq, &kevSet, 1, NULL, 0, NULL);
 	}
-
-
-	printf("Sent %ld bytes in %lu microseconds --> %lf GB/s\n", total_bytes_sent, total_time, (total_bytes_sent /(double)1e3)/(double)total_time);
 }
 
 
@@ -87,6 +80,18 @@ int loop(void *arg)
             ff_close(sockfd);
         } else if (event.filter == EVFILT_WRITE) {
             send_data(sockfd);
+        } else if (event.filter == EVFILT_READ) {
+            ssize_t read_bytes = ff_read(sockfd, buff, MAXLINE);
+            end = get_current_time();
+            total_bytes_recv += read_bytes;
+
+            if(total_bytes_recv >= iters * sizeof(ack)) {
+		        total_time = end - start;
+                double avg_latency = (double)total_time / (double)iters;
+                printf("Average latency: %.2f us for %d bytes data\n", avg_latency, MAXLINE);
+            	printf("Sent %ld bytes in %lu microseconds --> %lf GB/s\n", total_bytes_sent, total_time, (total_bytes_sent /(double)1e3)/(double)total_time);
+                exit(0);
+            }
         } else {
             printf("unknown event: %8.8X\n", event.flags);
         }
@@ -97,6 +102,7 @@ int loop(void *arg)
 int main(int argc, char * argv[])
 {
     ff_init(argc, argv);
+	buff = (char *)malloc(MAXLINE);
     
     kq = ff_kqueue();
     if (kq < 0) {
@@ -126,7 +132,7 @@ int main(int argc, char * argv[])
         exit(1);
     }
 
-    EV_SET(&kevSet, sockfd, EVFILT_WRITE, EV_ADD, 0, MAX_EVENTS, NULL);
+    EV_SET(&kevSet, sockfd, EVFILT_WRITE, EV_ADD | EV_ONESHOT, 0, 0, NULL);
     ff_kevent(kq, &kevSet, 1, NULL, 0, NULL);
 
     ff_run(loop, NULL);
