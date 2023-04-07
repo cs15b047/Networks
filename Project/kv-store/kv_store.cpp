@@ -28,10 +28,11 @@ void process_requests(int sockfd) {
         int read_bytes = read(sockfd, buff, MAXLINE);
         parse_request(buff, req);
         // print_request(req);
-        if(req.type == -1) break;
+        if(req.type == UINT64_MAX) break;
         resp = handle_request(req);
         write(sockfd, resp.c_str(), resp.length() + 1);
     }
+    cout << "Exiting thread" << endl;
     close(sockfd);
 }
 

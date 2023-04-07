@@ -32,18 +32,18 @@ void parse_request(char* buff, struct kv_request& req) {
     uint64_t *key_len = (uint64_t*)(buff + sizeof(uint64_t));
     // cout << "key_len: " << *key_len << endl;
     char *key = (char*)(buff + 2*sizeof(uint64_t));
-    req.key = string(key, *key_len);
+    req.key = string(key);
     // cout << "key: " << req.key << endl;
 
     if(req.type == 1) {
         uint64_t *value_len = (uint64_t*)(buff + 2*sizeof(uint64_t) + *key_len);
-        req.value = string(buff + 3*sizeof(uint64_t) + *key_len, *value_len);
+        req.value = string(buff + 3*sizeof(uint64_t) + *key_len);
     }
 }
 
 uint64_t generate_request(char* req, bool final = false) {
 	uint64_t len = 0;
-	uint64_t key_len = rand() % 10;
+	uint64_t key_len = (rand() % 10) + 1;
 	uint64_t* req_ptr = (uint64_t*)req;
 	
 	if(final) *req_ptr = UINT64_MAX;
@@ -53,7 +53,7 @@ uint64_t generate_request(char* req, bool final = false) {
 
 	char* key_ptr = (char*)(req_ptr + 2);
 	for(int i = 0; i < key_len; i++) {
-		key_ptr[i] = 'a' + rand() % 26;
+		key_ptr[i] = 'a' + (rand() % 26);
 	}
 	key_ptr[key_len - 1] = '\0';
 	// cout << "Key: " << key_ptr << endl;
@@ -62,13 +62,13 @@ uint64_t generate_request(char* req, bool final = false) {
 	
 	uint64_t type = *req_ptr;
 	if(type == 1) {
-		uint64_t value_len = rand() % 10;
+		uint64_t value_len = rand() % 10 + 1;
 		len += sizeof(uint64_t) + value_len;
 		req_ptr = (uint64_t*)(key_ptr + key_len);
 		*req_ptr = value_len;
 		char* value_ptr = (char*)(req_ptr + 1);
 		for(int i = 0; i < value_len; i++) {
-			value_ptr[i] = 'a' + rand() % 26;
+			value_ptr[i] = 'a' + (rand() % 26);
 		}
 		value_ptr[value_len - 1] = '\0';
 		// cout << "Value: " << value_ptr << endl;
