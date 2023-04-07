@@ -35,8 +35,8 @@ int kq;
 int sockfd;
 
 uint64_t start, end;
-uint64_t total_time = 0, iters = 100, total_bytes_sent = 0, total_bytes_recv = 0;
-char *buff;
+uint64_t iters = 5000, total_bytes_sent = 0, total_bytes_recv = 0;
+char buff[MAXLINE];
 char ack[2] = "a";
 
 void send_data(int sockfd) {
@@ -44,7 +44,7 @@ void send_data(int sockfd) {
 	// set data
 	bzero(buff, buffer_size);
 	for (int i = 0; i < buffer_size; i++) {
-		buff[i] = 'a'+ rand() % 26;
+		buff[i] = 'a' + (i % 26);
 	}
 	buff[buffer_size - 1] = '\0';
 
@@ -54,9 +54,6 @@ void send_data(int sockfd) {
 		// send data
 		ssize_t sent_bytes = ff_write(sockfd, buff, buffer_size);
 		total_bytes_sent += sent_bytes;
-         // add read event
-        EV_SET(&kevSet, sockfd, EVFILT_READ, EV_ADD, 0, 0, NULL);
-        ff_kevent(kq, &kevSet, 1, NULL, 0, NULL);
 	}
 }
 
@@ -66,10 +63,9 @@ int loop(void *arg)
     /* Wait for events to happen */
     int nevents = ff_kevent(kq, NULL, 0, events, MAX_EVENTS, NULL);
     int i;
+    int finished = 0;
 
-    if (nevents < 0) {
-        printf("ff_kevent failed:%d, %s\n", errno,
-                        strerror(errno));
+    if (nevents <= 0) {
         return -1;
     }
 
@@ -86,23 +82,29 @@ int loop(void *arg)
             total_bytes_recv += read_bytes;
 
             if(total_bytes_recv >= iters * sizeof(ack)) {
-		        total_time = end - start;
+		        double total_time = end - start;
                 double avg_latency = (double)total_time / (double)iters;
-                printf("Average latency: %.2f us for %d bytes data\n", avg_latency, MAXLINE);
-            	printf("Sent %ld bytes in %lu microseconds --> %lf GB/s\n", total_bytes_sent, total_time, (total_bytes_sent /(double)1e3)/(double)total_time);
-                exit(0);
+                printf("Average latency: %.2f microseconds for %d bytes\n", avg_latency, MAXLINE);
+            	printf("Sent %ld bytes in %.2f microseconds --> %lf GB/s\n", total_bytes_sent, total_time, (total_bytes_sent /(double)1e3)/(double)total_time);
+                finished = 1;
             }
         } else {
             printf("unknown event: %8.8X\n", event.flags);
         }
     }
+
+    if(finished) {
+        ff_close(sockfd);
+        exit(EXIT_SUCCESS);
+    }
+
+    return 0;
 }
 
 
 int main(int argc, char * argv[])
 {
     ff_init(argc, argv);
-	buff = (char *)malloc(MAXLINE);
     
     kq = ff_kqueue();
     if (kq < 0) {
@@ -128,12 +130,17 @@ int main(int argc, char * argv[])
 
     int ret = ff_connect(sockfd,(struct linux_sockaddr *)&server_sock,sizeof(server_sock));
     if (ret < 0 && errno != EINPROGRESS) {
-        printf("ff_bind failed, sockfd:%d, errno:%d, %s\n", sockfd, errno, strerror(errno));
+        printf("ff_connect failed, sockfd:%d, errno:%d, %s\n", sockfd, errno, strerror(errno));
         exit(1);
     }
-
-    EV_SET(&kevSet, sockfd, EVFILT_WRITE, EV_ADD | EV_ONESHOT, 0, 0, NULL);
+    EV_SET(&kevSet, sockfd, EVFILT_READ, EV_ADD , 0, MAX_EVENTS, NULL);
     ff_kevent(kq, &kevSet, 1, NULL, 0, NULL);
+
+    EV_SET(&kevSet, sockfd, EVFILT_WRITE, EV_ADD | EV_ONESHOT , 0, MAX_EVENTS, NULL);
+    ff_kevent(kq, &kevSet, 1, NULL, 0, NULL);
+
+ 
+ 
 
     ff_run(loop, NULL);
     return 0;

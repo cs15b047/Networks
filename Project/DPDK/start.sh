@@ -29,7 +29,7 @@ if [ $rc -ne 0 ]; then
 fi
 popd
 
-
+# run make on loop until it succeeds in one line
 
 while getopts "c:b:o:h" args
 do

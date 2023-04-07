@@ -10,7 +10,7 @@ endif
 
 PKGCONF ?= pkg-config
 
-CFLAGS += -g -gdwarf-2 $(shell $(PKGCONF) --cflags libdpdk)
+CFLAGS += -O3 -gdwarf-2 $(shell $(PKGCONF) --cflags libdpdk)
 
 LIBS+= $(shell $(PKGCONF) --static --libs libdpdk)
 LIBS+= -L${FF_PATH}/lib -Wl,--whole-archive,-lfstack,--no-whole-archive

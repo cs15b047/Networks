@@ -30,9 +30,10 @@ int sockfd6;
 #endif
 
 char ack[2] = "a";
-char *buf;
+uint64_t total_bytes_sent = 0, total_bytes_recv = 0;
+char buf[MAXLINE];
+
 void process_client(int clientfd) {
-    // TODO: change to calloc
     ssize_t readlen = ff_read(clientfd, buf, sizeof(buf));
     if (readlen < 0){
         printf("ff_read failed:%d, %s\n", errno,
@@ -43,6 +44,10 @@ void process_client(int clientfd) {
         printf("ff_write failed:%d, %s\n", errno,
             strerror(errno));
     } 
+    // total_bytes_sent += writelen;
+    // total_bytes_recv += readlen;
+
+    // printf("total_bytes_sent: %lu, total_bytes_recv: %lu\n", total_bytes_sent, total_bytes_recv);
 }
 
 int loop(void *arg)
@@ -77,12 +82,7 @@ int loop(void *arg)
 
                 /* Add to event list */
                 EV_SET(&kevSet, nclientfd, EVFILT_READ, EV_ADD, 0, 0, NULL);
-
-                if(ff_kevent(kq, &kevSet, 1, NULL, 0, NULL) < 0) {
-                    printf("ff_kevent error:%d, %s\n", errno,
-                        strerror(errno));
-                    return -1;
-                }
+                ff_kevent(kq, &kevSet, 1, NULL, 0, NULL);
 
                 available--;
             } while (available);
@@ -99,7 +99,6 @@ int loop(void *arg)
 int main(int argc, char * argv[])
 {
     ff_init(argc, argv);
-    buf = (char *)malloc(MAXLINE);
     kq = ff_kqueue();
     if (kq < 0) {
         printf("ff_kqueue failed, errno:%d, %s\n", errno, strerror(errno));
@@ -134,9 +133,9 @@ int main(int argc, char * argv[])
         exit(1);
     }
 
-    EV_SET(&kevSet, sockfd, EVFILT_READ, EV_ADD, 0, MAX_EVENTS, NULL);
-    /* Update kqueue */
+    EV_SET(&kevSet, sockfd, EVFILT_READ, EV_ADD , 0, MAX_EVENTS, NULL);
     ff_kevent(kq, &kevSet, 1, NULL, 0, NULL);
+
 
     ff_run(loop, NULL);
     return 0;
