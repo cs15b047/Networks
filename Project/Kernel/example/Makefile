@@ -1,12 +1,14 @@
 CC=gcc
 
-client: client.c
-	$(CC) -o client client.c
+all: clean client server
 
-server: server.c
-	$(CC) -o server server.c
+client: 
+	$(CC) -O3 -o client client.c
 
-all: client server
+server: 
+	$(CC) -O3 -o server server.c
+	$(CC) -O3 -o server_epoll server_epoll.c
+
 
 clean:
-	rm -f client server
+	rm -f client server server_epoll
