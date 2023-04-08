@@ -15,8 +15,10 @@
 
 #include "utils.h"
 
-#define MAX_EVENTS 51200
-#define MAXLINE 32
+#define MAX_EVENTS 512000
+#define MAXLINE 1024 * 1024 * 100
+
+
 
 /* kevent set */
 struct kevent kevSet;

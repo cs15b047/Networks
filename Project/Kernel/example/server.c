@@ -11,9 +11,11 @@
 
 #include "utils.h"
 
-#define MAXLINE 32768
-#define MAX 80
+#define MAXLINE 1024 * 1024
+
 #define SA struct sockaddr
+
+char ack[2] = "a";
 
 uint64_t get_current_time() {
 	// use gettimeofday
@@ -25,17 +27,17 @@ uint64_t get_current_time() {
 // Function designed for chat between client and server.
 void func(int connfd)
 {
-	char buff[MAX];
+	char buff[MAXLINE];
 	int n;
 	// infinite loop for chat
 	for (;;) {
-		bzero(buff, MAX);
+		bzero(buff, MAXLINE);
 
 		// read the message from client and copy it in buffer
 		read(connfd, buff, sizeof(buff));
 		// print buffer which contains the client contents
 		printf("From client: %s\t To client : ", buff);
-		bzero(buff, MAX);
+		bzero(buff, MAXLINE);
 		n = 0;
 		// copy server message in the buffer
 		while ((buff[n++] = getchar()) != '\n')
@@ -54,7 +56,6 @@ void func(int connfd)
 
 void receive_data(int sockfd) {
 	char *buff = calloc(MAXLINE, sizeof(char));
-	char ack[4] = "ack";
 	size_t buffer_size = MAXLINE * sizeof(char);
 	// receive data and send ack
 	uint64_t start, end;
@@ -65,9 +66,8 @@ void receive_data(int sockfd) {
 		start = get_current_time();
 		ssize_t read_bytes = read(sockfd, buff, buffer_size);
 		// printf("Got %ld bytes of data\n", read_bytes);
-		ssize_t sent_bytes = write(sockfd, ack, 4);
+		ssize_t sent_bytes = write(sockfd, ack, sizeof(ack));
 		end = get_current_time();
-		assert(sent_bytes == 4);
 
 		// printf("Got %ld bytes of data and sent back ack in %lu microseconds\n", read_bytes, end - start);
 	}
