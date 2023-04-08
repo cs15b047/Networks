@@ -12,10 +12,11 @@
 
 #include "ff_config.h"
 #include "ff_api.h"
+#include "ff_epoll.h"
 
 #include "utils.h"
 
-#define MAX_EVENTS 5120000
+#define MAX_EVENTS 51200
 #define MAXLINE 1024 * 1024
 #define SA struct sockaddr
 
@@ -26,19 +27,16 @@ uint64_t get_current_time() {
 	return tv.tv_sec * 1000000 + tv.tv_usec;
 }
 
-/* kevent set */
-struct kevent kevSet;
-struct kevent events[MAX_EVENTS];
+struct epoll_event ev;
+struct epoll_event events[MAX_EVENTS];
 
 /* kq */
-int kq;
+int epfd;
 int sockfd;
 
 uint64_t start, end;
-uint64_t iters = 100;
-
-uint64_t total_bytes_sent = 0, total_bytes_recv = 0;
-char *buff;
+uint64_t iters = 1000, total_bytes_sent = 0, total_bytes_recv = 0;
+char buff[MAXLINE];
 char ack[2] = "a";
 
 void send_data(int sockfd) {
@@ -56,14 +54,18 @@ void send_data(int sockfd) {
 		// send data
 		ssize_t sent_bytes = ff_write(sockfd, buff, buffer_size);
 		total_bytes_sent += sent_bytes;
+        ev.data.fd = sockfd + (i+1);
+        ev.events = EPOLLIN;
+        ff_epoll_ctl(epfd, EPOLL_CTL_MOD, sockfd, &ev);
 	}
+
 }
 
 
 int loop(void *arg)
 {
     /* Wait for events to happen */
-    int nevents = ff_kevent(kq, NULL, 0, events, MAX_EVENTS, NULL);
+    int nevents = ff_epoll_wait(epfd,  events, MAX_EVENTS, 0);
     int i;
     int finished = 0;
 
@@ -72,13 +74,16 @@ int loop(void *arg)
     }
 
     for (i = 0; i < nevents; ++i) {
-        struct kevent event = events[i];
+        int eventfd = events[i].data.fd;
+        // struct kevent event = events[i];
          /* Handle disconnect */
-        if (event.flags & EV_EOF || event.flags & EV_ERROR) {
-            ff_close(sockfd);
-        } else if (event.filter == EVFILT_WRITE) {
+        if (events[i].events & EPOLLERR ) {
+                /* Simply close socket */
+                ff_epoll_ctl(epfd, EPOLL_CTL_DEL,  events[i].data.fd, NULL);
+                ff_close(events[i].data.fd);
+        } else if (events[i].events & EPOLLOUT) {
             send_data(sockfd);
-        } else if (event.filter == EVFILT_READ) {
+        } else if (events[i].events & EPOLLIN) {
             ssize_t read_bytes = ff_read(sockfd, buff, MAXLINE);
             end = get_current_time();
             total_bytes_recv += read_bytes;
@@ -90,13 +95,12 @@ int loop(void *arg)
                 finished = 1;
             }
         } else {
-            printf("unknown event: %8.8X\n", event.flags);
+            printf("unknown event: %8.8X\n", events[i].events);
         }
     }
 
     if(finished) {
         ff_close(sockfd);
-        free(buff);
         exit(EXIT_SUCCESS);
     }
 
@@ -107,13 +111,7 @@ int loop(void *arg)
 int main(int argc, char * argv[])
 {
     ff_init(argc, argv);
-    buff = (char *)malloc(MAXLINE);
-    kq = ff_kqueue();
-    if (kq < 0) {
-        printf("ff_kqueue failed, errno:%d, %s\n", errno, strerror(errno));
-        exit(1);
-    }
-
+    
     sockfd = ff_socket(AF_INET, SOCK_STREAM, 0);
 
     if (sockfd < 0) {
@@ -135,12 +133,13 @@ int main(int argc, char * argv[])
         printf("ff_connect failed, sockfd:%d, errno:%d, %s\n", sockfd, errno, strerror(errno));
         exit(1);
     }
-    EV_SET(&kevSet, sockfd, EVFILT_READ, EV_ADD , 0, MAX_EVENTS, NULL);
-    ff_kevent(kq, &kevSet, 1, NULL, 0, NULL);
 
-    EV_SET(&kevSet, sockfd, EVFILT_WRITE, EV_ADD | EV_ONESHOT , 0, MAX_EVENTS, NULL);
-    ff_kevent(kq, &kevSet, 1, NULL, 0, NULL);
+    assert((epfd = ff_epoll_create(0)) > 0);
+    ev.data.fd = sockfd;
+    ev.events = EPOLLOUT | EPOLLIN;
+    ff_epoll_ctl(epfd, EPOLL_CTL_ADD, sockfd, &ev);
 
-    ff_run(loop, NULL);
+
+     ff_run(loop, NULL);
     return 0;
 }

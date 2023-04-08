@@ -8,12 +8,17 @@
 #include <arpa/inet.h> // inet_addr
 #include <sys/time.h> // gettimeofday
 #include <assert.h>
+#include <errno.h>
+#include <sys/ioctl.h>
 
 #include "utils.h"
 
 #define MAX 	 80
-#define MAXLINE 32768
+#define MAXLINE 1024 * 1024 * 100
+
 #define SA struct sockaddr
+
+int iters = 1000;
 
 uint64_t get_current_time() {
 	// use gettimeofday
@@ -53,25 +58,28 @@ void send_data(int sockfd) {
 	}
 	buff[buffer_size - 1] = '\0';
 
-	uint64_t total_time = 0, iters = 1024 * 1024, total_bytes_sent = 0;
+	uint64_t total_time = 0, total_bytes_sent = 0, total_bytes_recv = 0;
 
+	uint64_t start, end;
+	start = get_current_time();
 	for(int i = 0; i < iters; i++) {
 		// send data
-		uint64_t start, end;
 
-		start = get_current_time();
 		ssize_t sent_bytes = write(sockfd, buff, buffer_size);
 		int read_bytes = read(sockfd, buff, buffer_size);
-		end = get_current_time();
-		total_time += end - start;
 		total_bytes_sent += sent_bytes;
+		total_bytes_recv += read_bytes;
 		// assert(read_bytes == 4);
 		// assert(strcmp(buff, "ack\0") == 0);
 		// printf("Sent + ack time: %lu\n", end - start);
 	}
+	end = get_current_time();
+	total_time += end - start;
 
-
-	printf("Sent %ld bytes in %lu microseconds --> %lf GB/s\n", total_bytes_sent, total_time, (total_bytes_sent /(double)1e3)/(double)total_time);
+	printf("Total bytes read: %lu\n", total_bytes_recv);
+ 	double avg_latency = (double)total_time / (double)iters;
+	printf("Average latency: %.2f microseconds for %d bytes\n", avg_latency, MAXLINE);
+	printf("Sent %ld bytes in %lu microseconds --> %lf Gbps\n", total_bytes_sent, total_time, (total_bytes_sent * 8 /(double)1e3)/(double)total_time);
 }
 
 int main()

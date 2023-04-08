@@ -22,6 +22,7 @@ BUILDDIR=./build
 all: clean $(BUILDDIR)
 	cc ${CFLAGS} -o $(BUILDDIR)/${TARGET}_server server.c ${LIBS}
 	cc ${CFLAGS} -o $(BUILDDIR)/${TARGET}_client client.c ${LIBS}
+	cc ${CFLAGS} -o $(BUILDDIR)/${TARGET}_client_epoll client_epoll.c ${LIBS}
 
 $(BUILDDIR):
 	mkdir $(BUILDDIR)
