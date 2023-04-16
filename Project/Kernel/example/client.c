@@ -14,11 +14,11 @@
 #include "utils.h"
 
 #define MAX 	 80
-#define MAXLINE 1024 * 1024 * 100
+#define MAXLINE 1024 * 1024
 
 #define SA struct sockaddr
 
-int iters = 1000;
+int iters = 100;
 
 uint64_t get_current_time() {
 	// use gettimeofday

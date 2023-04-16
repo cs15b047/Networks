@@ -16,7 +16,7 @@
 #include "utils.h"
 
 #define MAX_EVENTS 5120000
-#define MAXLINE 1024 * 1024
+#define MAXLINE 1024 * 10
 #define SA struct sockaddr
 
 uint64_t get_current_time() {
@@ -35,7 +35,7 @@ int kq;
 int sockfd;
 
 uint64_t start, end;
-uint64_t iters = 100;
+uint64_t iters = 1000;
 
 uint64_t total_bytes_sent = 0, total_bytes_recv = 0;
 char *buff;

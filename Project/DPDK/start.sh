@@ -16,9 +16,9 @@ function usage() {
     exit
 }
 
-
-conf=./app/config.ini
-bin=./app/build/fstack_server
+PROJECT_DIR=/mnt/Work/Networks/Project/DPDK
+conf=${PROJECT_DIR}/app/config.ini
+bin=${PROJECT_DIR}/app/build/fstack_client
 
 pushd /mnt/Work/Networks/Project/DPDK/app
 make > /dev/null
