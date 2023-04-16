@@ -140,9 +140,13 @@ int main(int argc, char *argv[]) {
     vector<int> partition(partition_size);
     generate_random_input(partition, partition_size);
 
+    cout << "Random input generated. Starting partition sort" << endl;
+    cout << "Partition size = " << partition.size() << endl;
+
     // Sort the partition
     sort(partition.begin(), partition.end());
 
+    cout << "Partition sorted" << endl;
     // Send the partition to the master- rank 0
     if(rank != 0){
         send_partition(partition, partition_size, rank);
@@ -153,6 +157,7 @@ int main(int argc, char *argv[]) {
         vector<int> partition_sizes = receive_partitions(num_workers, partition, partition_size);
         // Merge the partitions instead of sorting whole array
         vector<int> result(N);
+        cout << "Starting merge" << endl;
         merge(partition, partition_sizes, num_workers, result);
 
         assert(verify_sorted(result));
