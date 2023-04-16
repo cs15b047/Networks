@@ -11,7 +11,8 @@
 
 #include "utils.h"
 
-#define MAXLINE 1024 * 1024
+#define MAXLINE 1024 * 10
+
 
 #define SA struct sockaddr
 
