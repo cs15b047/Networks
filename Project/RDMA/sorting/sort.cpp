@@ -75,13 +75,20 @@ vector<int> receive_partitions(int num_workers, vector<int>& merged_arr, int rec
     for(int i = 1; i < num_workers; i++) {
         clients[i] = new Client();
         struct Client* client = clients[i];
-        cout << "Client: " << i << ": " << client << endl;
         int ret = setup_client_resources(client);
         cout << "Return value from setup_client_resources: " << ret << endl;
-        ret = accept_client_connection(client);
+    }
+
+    for(int i = 1; i < num_workers; i++) {
+        int ret = accept_client_connection(clients[i]);
         cout << "Return value from accept_client_connection: " << ret << endl;
+    }
+
+    for(int i = 1; i < num_workers; i++) {
+        struct Client* client = clients[i];
+        
         uint32_t partition_size = 0, bytes_to_recv;
-        ret = send_server_metadata_to_client((char *) (merged_arr.data() + recv_ptr), bytes_to_recv, client);
+        int ret = send_server_metadata_to_client((char *) (merged_arr.data() + recv_ptr), bytes_to_recv, client);
         partition_size = bytes_to_recv / sizeof(int);
         partition_sizes[i] = partition_size;
         recv_ptr += partition_size;
