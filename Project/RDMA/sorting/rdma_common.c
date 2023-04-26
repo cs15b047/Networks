@@ -127,6 +127,9 @@ int process_rdma_cm_event(struct rdma_event_channel *echannel,
 		// rdma_error("Unexpected event received: %s [ expecting: %s ]", rdma_event_str((*cm_event)->event), rdma_event_str(expected_event));
 		/* important, we acknowledge the event */
 		rdma_ack_cm_event(*cm_event);
+		printf("Expected event: %s, received event: %s\n", 
+				rdma_event_str(expected_event), 
+				rdma_event_str((*cm_event)->event));
 		return -1; // unexpected event :(
 	}
 	debug("A new %s type event is received \n", rdma_event_str((*cm_event)->event));
