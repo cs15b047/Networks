@@ -10,7 +10,7 @@
 #ifndef RDMA_COMMON_H
 #define RDMA_COMMON_H
 
-
+#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -46,7 +46,7 @@
 /* Capacity of the completion queue (CQ) */
 #define CQ_CAPACITY (16)
 /* MAX SGE capacity */
-#define MAX_SGE (2)
+#define MAX_SGE (10)
 /* MAX work requests */
 #define MAX_WR (8)
 /* Default port where the RDMA server is listening */
