@@ -13,9 +13,9 @@ string ip_addr;
 
 void generate_random_input(vector<int>& partition, int partition_size) {
     // Generate random input
-    for (int i = 0; i < partition_size; i++) {
-        partition[i] = rand() % INT_MAX;
-    }
+    generate(partition.begin(), partition.begin() + partition_size, []() {
+        return rand() % INT_MAX;
+    });
 }
 
 struct sockaddr_in generate_server_info(){
@@ -64,7 +64,7 @@ void setup_server() {
     int ret = start_rdma_server(&serv_addr);
 }
 
-vector<int> receive_partitions(int num_workers, vector<int>& merged_arr, int recv_ptr) {
+vector<int> receive_partitions(int num_workers, vector<int>& merged_arr, uint64_t recv_ptr) {
     if(num_workers > 1) setup_server();
 
     vector<int> partition_sizes(num_workers);
@@ -91,7 +91,7 @@ vector<int> receive_partitions(int num_workers, vector<int>& merged_arr, int rec
         int ret = send_server_metadata_to_client((char *) (merged_arr.data() + recv_ptr), bytes_to_recv, client);
         partition_size = bytes_to_recv / sizeof(int);
         partition_sizes[i] = partition_size;
-        recv_ptr += partition_size;
+        recv_ptr += (uint64_t)partition_size;
         cout << "Received partition of size " << partition_size << endl;
         cout << "Recv_ptr = " << recv_ptr << endl;
     }
@@ -102,9 +102,9 @@ vector<int> receive_partitions(int num_workers, vector<int>& merged_arr, int rec
 }
 
 void merge(vector<int>& merged_arr, vector<int>& partition_sizes, int num_workers, vector<int>& result) {
-    int N = merged_arr.size();
-    vector<int> partition_ptrs(num_workers);
-    vector<int> cum_partition_sizes(num_workers);
+    long N = merged_arr.size();
+    vector<long> partition_ptrs(num_workers);
+    vector<long> cum_partition_sizes(num_workers);
     cum_partition_sizes[0] = partition_sizes[0];
     for(int i = 1; i < num_workers; i++) {
         cum_partition_sizes[i] = cum_partition_sizes[i - 1] + partition_sizes[i];
@@ -118,12 +118,12 @@ void merge(vector<int>& merged_arr, vector<int>& partition_sizes, int num_worker
     }
 
     // Perform a k-way merge (k = num_workers) using extra space
-    for(int i = 0; i < N; i++) {
+    for(long i = 0; i < N; i++) {
         int min_val = INT_MAX;
         int min_idx = -1;
         // get the minimum value from each partition
         for(int j = 0; j < num_workers; j++) {
-            int ptr = partition_ptrs[j];
+            long ptr = partition_ptrs[j];
             if(ptr < cum_partition_sizes[j] && merged_arr[ptr] <= min_val) {
                 min_val = merged_arr[ptr];
                 min_idx = j;
@@ -158,7 +158,7 @@ int main(int argc, char *argv[]) {
     ip_addr = string(argv[3]);
     int rank = atoi(argv[4]);
 
-    int partition_size = N / num_workers;
+    long partition_size = N / num_workers;
     if (rank == num_workers - 1) {
         partition_size += (N % num_workers);
     }
