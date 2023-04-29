@@ -23,6 +23,7 @@
 #include "http_parsing.h"
 #include "netlib.h"
 #include "debug.h"
+#include "utils.h"
 
 #define MAX_FLOW_NUM  (10000)
 
@@ -254,7 +255,7 @@ CreateListeningSocket(struct thread_context *ctx)
 	/* bind to port 80 */
 	saddr.sin_family = AF_INET;
 	saddr.sin_addr.s_addr = INADDR_ANY;
-	saddr.sin_port = htons(80);
+	saddr.sin_port = htons(SERV_PORT);
 	ret = mtcp_bind(ctx->mctx, listener, 
 			(struct sockaddr *)&saddr, sizeof(struct sockaddr_in));
 	if (ret < 0) {

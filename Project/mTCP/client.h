@@ -24,6 +24,7 @@
 #include "http_parsing.h"
 #include "netlib.h"
 #include "debug.h"
+#include "utils.h"
 
 #define MAX_URL_LEN 128
 #define FILE_LEN    128
@@ -545,16 +546,15 @@ int ret;
 int i;
 int process_cpu = -1;
 
-int ParseArgs(int argc, char **argv, int port) {
-    if (argc != 3) {
+int ParseArgs(int argc, char **argv) {
+    if (argc != 2) {
 		TRACE_CONFIG("Too few arguments!\n");
-		TRACE_CONFIG("Usage: %s url #flows\n", argv[0]);
+		TRACE_CONFIG("Usage: %s #flows\n", argv[0]);
 		return FALSE;
 	}
 
-    strncpy(host, argv[1], MAX_IP_STR_LEN);
-	daddr = inet_addr(host);
-	dport = htons(port);
+	daddr = inet_addr(SERV_ADDR);
+	dport = htons(SERV_PORT);
 	saddr = INADDR_ANY;
 
 	total_flows = mystrtol(argv[2], 10);

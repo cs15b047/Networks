@@ -181,7 +181,7 @@ HandleReadEvent(thread_context_t ctx, int sockid, struct wget_vars *wv)
 int 
 main(int argc, char **argv)
 {    
-    ret = ParseArgs(argc, argv, PORT);
+    ret = ParseArgs(argc, argv);
     if (!ret) {
         TRACE_ERROR("Failed to parse arguments.\n");
         exit(EXIT_FAILURE);
