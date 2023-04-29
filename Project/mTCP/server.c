@@ -4,19 +4,33 @@ static int
 ServerRead(struct thread_context *ctx, int sockid)
 {
 	struct mtcp_epoll_event ev;
-	char buf[HTTP_HEADER_LEN];
 	char response[HTTP_HEADER_LEN];
 	int rd;
 	int len;
 	int sent;
+	int arr_len;
 
-	rd = mtcp_read(ctx->mctx, sockid, buf, HTTP_HEADER_LEN);
+	rd = mtcp_read(ctx->mctx, sockid, (char *) &arr_len, sizeof(int));
 	if (rd <= 0) {
 		return rd;
 	}
 
 	printf("Received %d bytes\n", rd);
-	printf("Received Message: %s\n", buf);
+	printf("Received Array Length: %d\n", arr_len);
+
+	int array[arr_len];
+
+	rd = mtcp_read(ctx->mctx, sockid, (char *) &array, sizeof(int) * arr_len);
+	if (rd <= 0) {
+		return rd;
+	}
+
+	printf("Received %d bytes\n", rd);
+	printf("Received Array: ");
+	for (int i = 0; i < arr_len; i++) {
+		printf("%d ", array[i]);
+	}
+	printf("\n");
 
 	strcpy(response, "hello from server");
 	len = strlen(response);

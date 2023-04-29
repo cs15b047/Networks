@@ -371,7 +371,7 @@ int ParseArgs(int argc, char **argv) {
 
 int ClientSetup() {
     num_cores = GetNumCPUs();
-	core_limit = 8;
+	core_limit = 1;
 	concurrency = 1;
     conf_file = "./conf/client.conf";
 

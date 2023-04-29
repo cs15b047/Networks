@@ -1,23 +1,35 @@
 #include "client.h"
 
+
+void create_random_array(int *array, int size) {
+	int i;
+	for (i = 0; i < size; i++) {
+		array[i] = rand() % 100;
+	}
+}
+
 static inline int 
 ClientWrite(thread_context_t ctx, int sockid)
 {
-	char request[HTTP_HEADER_LEN];
 	struct mtcp_epoll_event ev;
 	int wr;
 	int len;
+	int arr_len = 10;
+	int array[arr_len];
+	create_random_array(array, arr_len);
 
-	strcpy(request, "hello world");
-	len = strlen(request);
-
-	wr = mtcp_write(ctx->mctx, sockid, request, len);
+	wr = mtcp_write(ctx->mctx, sockid, (char*) &arr_len, sizeof(int));
 	if (wr < len) {
 		TRACE_ERROR("Socket %d: Sending HTTP request failed. "
 				"try: %d, sent: %d\n", sockid, len, wr);
 	}
 
-	TRACE_APP("Socket %d HTTP Request of %d bytes. sent.\n", sockid, wr);
+	wr = mtcp_write(ctx->mctx, sockid, (char*) array, arr_len * sizeof(int));
+	if (wr < len) {
+		TRACE_ERROR("Socket %d: Sending HTTP request failed. "
+				"try: %d, sent: %d\n", sockid, len, wr);
+	}
+	
 
 	ev.events = MTCP_EPOLLIN;
 	ev.data.sockid = sockid;
