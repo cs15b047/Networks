@@ -90,7 +90,7 @@ static int setup_client_resources(struct Client* client)
 	 * use client->cm_client_id->verbs. 
 	 */
 	client->io_completion_channel = ibv_create_comp_channel(client->cm_client_id->verbs);
-	cout << "client->io_completion_channel: " << client->io_completion_channel << endl;
+	// cout << "client->io_completion_channel: " << client->io_completion_channel << endl;
 	if (!client->io_completion_channel) {
 		printf("Failed to create an I/O completion event channel, %d\n", -errno);
 		return -errno;
@@ -288,10 +288,10 @@ static int send_server_metadata_to_client(char* partition_memory, uint32_t& requ
 		return ret;
 	}
 	/* if all good, then we should have client's buffer information, lets see */
-	printf("Client side buffer information is received...\n");
-	show_rdma_buffer_attr(&(client->client_metadata_attr));
-	printf("The client has requested buffer length of : %u bytes \n", 
-			client->client_metadata_attr.length);
+	// printf("Client side buffer information is received...\n");
+	// show_rdma_buffer_attr(&(client->client_metadata_attr));
+	// printf("The client has requested buffer length of : %u bytes \n", 
+	// 		client->client_metadata_attr.length);
 	requested_size = client->client_metadata_attr.length;
 
 	printf("Server allocated buffer addr: %p\n", partition_memory);

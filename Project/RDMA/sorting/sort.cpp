@@ -41,28 +41,33 @@ void print_partition(vector<int>& partition) {
         cout << i << " -> " << partition[i] << endl;
 }
 
-void setup_client(int dst_rank) {
+void setup_client(int dst_rank, struct Connection* conn_state) {
     struct sockaddr_in serv_addr = get_server_info(dst_rank);
-    int ret = client_prepare_connection(&serv_addr);
-    ret = client_pre_post_recv_buffer(); 
-    cout << ret << endl;
+    int ret = client_prepare_connection(&serv_addr, conn_state);
+    ret = client_pre_post_recv_buffer(conn_state);
+    // cout << ret << endl;
 }
 
 void send_partition(vector<int*>& partition_starts, vector<int> partition_sizes, int rank, int num_workers) {
     cout << "Step 3: Sending partition pieces to all workers" << endl;
+    vector<struct Connection*> conn_state(num_workers, NULL);
+    for(int i = 0; i < num_workers; i++) {
+        conn_state[i] = new Connection();
+    }
     for(int dst_rank = 0; dst_rank < num_workers; dst_rank++) {
         if(dst_rank == rank) continue;
-        cout << "Sending partition to rank " << dst_rank << endl;
-        setup_client(dst_rank);
-        int ret = client_connect_to_server();
-        cout << ret << endl;
-        ret = client_xchange_metadata_with_server((char *)partition_starts[dst_rank], (size_t)(partition_sizes[dst_rank] * sizeof(int)));
-        cout << ret << endl;
-        ret = client_remote_memory_ops();
-        cout << ret << endl;
+        // cout << "Sending partition to rank " << dst_rank << endl;
+        setup_client(dst_rank, conn_state[dst_rank]);
+        int ret = client_connect_to_server(conn_state[dst_rank]);
+        // cout << ret << endl;
+        ret = client_xchange_metadata_with_server((char *)partition_starts[dst_rank], (size_t)(partition_sizes[dst_rank] * sizeof(int)), conn_state[dst_rank]);
+        // cout << ret << endl;
+        ret = client_remote_memory_ops(conn_state[dst_rank]);
+        // cout << ret << endl;
         // Send size first, then the partition
         cout << "Sending partition of size " << partition_sizes[dst_rank] << " to rank " << dst_rank << endl;
     }
+    cout << "All partitions sent" << endl;
 }
 
 void setup_server(int rank) {
@@ -76,7 +81,6 @@ vector<int> receive_partitions(int num_workers, vector<int>& merged_arr, uint64_
     partition_sizes[0] = recv_ptr;
 
     vector<Client*> clients(num_workers, NULL);
-    cout << "" << endl;
 
     for(int i = 1; i < num_workers; i++) {
         clients[i] = new Client();
@@ -97,9 +101,10 @@ vector<int> receive_partitions(int num_workers, vector<int>& merged_arr, uint64_
         partition_size = bytes_to_recv / sizeof(int);
         partition_sizes[i] = partition_size;
         recv_ptr += (uint64_t)partition_size;
-        cout << "Received partition of size " << partition_size << endl;
-        cout << "Recv_ptr = " << recv_ptr << endl;
+        // cout << "Received partition of size " << partition_size << endl;
+        // cout << "Recv_ptr = " << recv_ptr << endl;
     }
+    cout << "Received all partitions" << endl;
     cout << "Recv ptr: " << recv_ptr << ", Merged array size = " << merged_arr.size() << endl;
     assert (recv_ptr <= merged_arr.size());
     merged_arr.resize(recv_ptr);
@@ -231,6 +236,8 @@ int main(int argc, char *argv[]) {
     cout << "Random input generated. Starting partition sort" << endl;
     cout << "Partition size = " << partition.size() << endl;
 
+
+
     // Step 1- sort local data
     auto sort_start = chrono::high_resolution_clock::now();
     sort(partition.begin(), partition.end());
@@ -259,7 +266,7 @@ int main(int argc, char *argv[]) {
     vector<int> local_partition = vector<int>(partition_starts[rank], partition_starts[rank] + partition_sizes[rank]);
     uint64_t local_size = local_partition.size();
     // print_partition(local_partition);
-    cout << "Local partition size: " << local_size << endl;
+    // cout << "Local partition size: " << local_size << endl;
     local_partition.resize(new_size);
     auto resize_end = chrono::high_resolution_clock::now();
     vector<int> partition_sizes_recv = receive_partitions(num_workers, local_partition, local_size);
