@@ -43,9 +43,6 @@ void setup_client(int dst_rank, struct Connection* conn_state) {
 
 void send_partition(vector<int*>& partition_starts, vector<int> partition_sizes, int rank, int num_workers) {
     cout << "Step 3: Sending partition pieces to all workers" << endl;
-    for(int i = 0; i < num_workers; i++) {
-        conn_state[i] = new Connection();
-    }
     for(int dst_rank = 0; dst_rank < num_workers; dst_rank++) {
         if(dst_rank == rank) continue;
         // cout << "Sending partition to rank " << dst_rank << endl;
@@ -96,6 +93,7 @@ void setup_server_connection(int num_workers) {
     for(int i = 1; i < num_workers; i++) {
         clients[i] = new Client();
         struct Client* client = clients[i];
+        cout << "Setting up client " << i << endl;
         int ret = setup_client_resources(client);
         cout << "Client setup: " << ret << endl;
     }
@@ -107,8 +105,12 @@ void setup_server_connection(int num_workers) {
 }
 
 void setup_client_connection(int num_workers, int rank) {
+    cout << "Workers: " << num_workers << ", rank: " << rank << endl;
     cout << "Step 2: Setting up client connections" << endl;
     conn_state.resize(num_workers, NULL);
+    for(int i = 0; i < num_workers; i++) {
+        conn_state[i] = new Connection();
+    }
     for(int dst_rank = 0; dst_rank < num_workers; dst_rank++){
         if(dst_rank == rank) continue;
         cout << "Setting up client connection to server " << dst_rank << endl;
@@ -172,6 +174,8 @@ int main(int argc, char *argv[]) {
     thread client_conn_thread = thread([&](){
         if(num_workers > 1) setup_client_connection(num_workers, rank);
     });
+
+    cout << "Step 1- Starting local sort" << endl;
 
     // Step 1- sort local data
     auto sort_start = chrono::high_resolution_clock::now();
