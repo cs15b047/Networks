@@ -1,4 +1,5 @@
-#include "client.h"
+#include "../common/client.h"
+#include "utils.h"
 #include <bits/stdc++.h>
 
 using namespace std;
@@ -18,7 +19,7 @@ ClientWrite(thread_context_t ctx, int sockid)
 	struct mtcp_epoll_event ev;
 	int wr;
 	int len;
-	int arr_len = 10;
+	int arr_len = 100;
 	vector<int> array = create_random_array(arr_len);
 
 	wr = mtcp_write(ctx->mctx, sockid, (char*) &arr_len, sizeof(int));
@@ -79,13 +80,7 @@ ClientRead(thread_context_t ctx, int sockid)
 int 
 main(int argc, char **argv)
 {    
-    ret = ParseArgs(argc, argv);
-    if (!ret) {
-        TRACE_ERROR("Failed to parse arguments.\n");
-        exit(EXIT_FAILURE);
-    }
-
-    ret = ClientSetup();
+    ret = ClientSetup(SERV_ADDR, SERV_PORT);
     if (!ret) {
         TRACE_ERROR("Failed to setup client.\n");
         exit(EXIT_FAILURE);

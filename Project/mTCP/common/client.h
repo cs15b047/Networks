@@ -24,7 +24,6 @@
 #include "http_parsing.h"
 #include "netlib.h"
 #include "debug.h"
-#include "utils.h"
 
 #define MAX_URL_LEN 128
 #define FILE_LEN    128
@@ -78,7 +77,7 @@ static in_addr_t daddr;
 static in_port_t dport;
 static in_addr_t saddr;
 /*----------------------------------------------------------------------------*/
-static int total_flows;
+static int total_flows = 100;
 static int flows[MAX_CPUS];
 static int concurrency;
 static int max_fds;
@@ -348,27 +347,6 @@ int ret;
 int i;
 int process_cpu = -1;
 
-int ParseArgs(int argc, char **argv) {
-    if (argc != 2) {
-		TRACE_CONFIG("Too few arguments!\n");
-		TRACE_CONFIG("Usage: %s #flows\n", argv[0]);
-		return FALSE;
-	}
-
-	strncpy(host, SERV_ADDR, MAX_IP_STR_LEN);
-	daddr = inet_addr(host);
-	dport = htons(SERV_PORT);
-	saddr = INADDR_ANY;
-
-	total_flows = atoi(argv[1]);
-	if (total_flows <= 0) {
-		TRACE_CONFIG("Number of flows should be large than 0.\n");
-		return FALSE;
-	}
-
-    return TRUE;
-}
-
 
 int GetTotalCPUs() {
 	int num_cpus = sysconf(_SC_NPROCESSORS_ONLN);
@@ -379,12 +357,20 @@ int GetTotalCPUs() {
 	return num_cpus;
 }
 
+void SetupServerInfo(char *host, uint16_t port) {
+	// strncpy(host, SERV_ADDR, MAX_IP_STR_LEN);
+	daddr = inet_addr(host);
+	dport = htons(port);
+	saddr = INADDR_ANY;
+}
 
-int ClientSetup() {
+int ClientSetup(char *host, uint16_t port) {
     num_cores = GetTotalCPUs();
 	core_limit = 1;
 	concurrency = 1;
     conf_file = const_cast<char*>("./conf/client.conf");
+
+	SetupServerInfo(host, port);
 
     if (core_limit > num_cores) {
         TRACE_CONFIG("CPU limit should be smaller than the "

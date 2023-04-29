@@ -24,8 +24,6 @@
 #include "http_parsing.h"
 #include "netlib.h"
 #include "debug.h"
-#include "utils.h"
-
 #define MAX_FLOW_NUM  (10000)
 
 #define RCVBUF_SIZE (2*1024)
@@ -69,6 +67,7 @@ struct thread_context
 /*----------------------------------------------------------------------------*/
 static int num_cores;
 static int core_limit;
+static int server_port = 8080;
 
 static pthread_t app_thread[MAX_CPUS];
 static int done[MAX_CPUS];
@@ -184,7 +183,7 @@ CreateListeningSocket(struct thread_context *ctx)
 	/* bind to port 80 */
 	saddr.sin_family = AF_INET;
 	saddr.sin_addr.s_addr = INADDR_ANY;
-	saddr.sin_port = htons(SERV_PORT);
+	saddr.sin_port = htons(server_port);
 	ret = mtcp_bind(ctx->mctx, listener, 
 			(struct sockaddr *)&saddr, sizeof(struct sockaddr_in));
 	if (ret < 0) {
@@ -352,10 +351,13 @@ int cores[MAX_CPUS];
 int process_cpu;
 int i;
 
-int ServerSetup() {		
+
+
+int ServerSetup(uint16_t port) {		
 	num_cores = GetTotalCPUs();
 	core_limit = num_cores;
 	process_cpu = -1;
+	server_port = port;
 	conf_file = const_cast<char*>("./conf/server.conf");
 
 	core_limit = 8;	

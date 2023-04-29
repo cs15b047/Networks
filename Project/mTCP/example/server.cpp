@@ -1,4 +1,5 @@
-#include "server.h"
+#include "../common/server.h"
+#include "utils.h"
 #include <bits/stdc++.h>
 
 using namespace std;
@@ -59,7 +60,7 @@ ServerRead(struct thread_context *ctx, int sockid)
 int 
 main(int argc, char **argv)
 {	
-	int ret = ServerSetup();
+	int ret = ServerSetup(SERV_PORT);
 	if (!ret) {
 		TRACE_CONFIG("Failed to setup mtcp\n");
 		exit(EXIT_FAILURE);
