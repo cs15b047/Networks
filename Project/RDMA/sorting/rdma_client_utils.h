@@ -218,7 +218,6 @@ static int client_connect_to_server()
 		// rdma_error("Failed to acknowledge cm event, errno: %d\n", -errno);
 		return -errno;
 	}
-	printf("The client is connected successfully \n");
 	return 0;
 }
 
@@ -241,7 +240,7 @@ static int client_xchange_metadata_with_server(char* src, uint32_t src_len_bytes
 		// rdma_error("Failed to register the first buffer, ret = %d \n", ret);
 		return ret;
 	}
-	cout << "Buffer registered successfully" << endl;
+	// cout << "Buffer registered successfully" << endl;
 	/* we prepare metadata for the first buffer */
 	client_metadata_attr.address = (uint64_t) client_src_mr->addr; 
 	client_metadata_attr.length = client_src_mr->length; 
@@ -255,7 +254,7 @@ static int client_xchange_metadata_with_server(char* src, uint32_t src_len_bytes
 		// rdma_error("Failed to register the client metadata buffer, ret = %d \n", ret);
 		return ret;
 	}
-	cout << "Metadata buffer registered successfully" << endl;
+	// cout << "Metadata buffer registered successfully" << endl;
 
 	/* now we fill up SGE */
 	client_send_sge.addr = (uint64_t) client_metadata_mr->addr;
@@ -275,7 +274,7 @@ static int client_xchange_metadata_with_server(char* src, uint32_t src_len_bytes
 		// rdma_error("Failed to send client metadata, errno: %d \n", -errno);
 		return -errno;
 	}
-	cout << "Metadata sent successfully" << endl;
+	// cout << "Metadata sent successfully" << endl;
 
 	/* at this point we are expecting 2 work completion. One for our 
 	 * send and one for recv that we will get from the server for 
@@ -286,7 +285,7 @@ static int client_xchange_metadata_with_server(char* src, uint32_t src_len_bytes
 		// rdma_error("We failed to get 2 work completions , ret = %d \n", ret);
 		return ret;
 	}
-	cout << "Work completion received successfully" << endl;
+	// cout << "Work completion received successfully" << endl;
 	debug("Server sent us its buffer location and credentials, showing \n");
 	show_rdma_buffer_attr(&server_metadata_attr);
 	return 0;
@@ -323,7 +322,7 @@ static int client_remote_memory_ops()
 		// rdma_error("Failed to write client src buffer, errno: %d \n",  -errno);
 		return -errno;
 	}
-	cout << "Buffer send posted successfully" << endl;
+	// cout << "Buffer send posted successfully" << endl;
 
 	/* at this point we are expecting 1 work completion for the write */
 	ret = process_work_completion_events(io_completion_channel, 
@@ -332,7 +331,7 @@ static int client_remote_memory_ops()
 		// rdma_error("We failed to get 1 work completions , ret = %d \n",ret);
 		return ret;
 	}
-	cout << "Work completion received successfully" << endl;
+	// cout << "Work completion received successfully" << endl;
 
 	debug("Client side WRITE is complete \n");
 	return 0;

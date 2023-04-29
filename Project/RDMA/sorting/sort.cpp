@@ -76,20 +76,19 @@ vector<int> receive_partitions(int num_workers, vector<int>& merged_arr, uint64_
     partition_sizes[0] = recv_ptr;
 
     vector<Client*> clients(num_workers, NULL);
-    cout << "Receiving partitions" << endl;
+    cout << "" << endl;
 
     for(int i = 1; i < num_workers; i++) {
         clients[i] = new Client();
         struct Client* client = clients[i];
         int ret = setup_client_resources(client);
-        cout << "Return value from setup_client_resources: " << ret << endl;
     }
 
     for(int i = 1; i < num_workers; i++) {
         int ret = accept_client_connection(clients[i]);
-        cout << "Return value from accept_client_connection: " << ret << endl;
     }
 
+    cout << "Accepted all client connections, start receiving partitions" << endl;
     for(int i = 1; i < num_workers; i++) {
         struct Client* client = clients[i];
         
@@ -159,7 +158,7 @@ bool verify_partitioning(vector<int>& partition_sizes, long N) {
     for(int i = 0; i < num_workers; i++) {
         sum += (long)partition_sizes[i];
     }
-    cout << "Sum of sizes: " << sum << ", Expected size: " << N << endl;
+    // cout << "Sum of sizes: " << sum << ", Expected size: " << N << endl;
     return sum == N;
 }
 
@@ -262,7 +261,9 @@ int main(int argc, char *argv[]) {
     // print_partition(local_partition);
     cout << "Local partition size: " << local_size << endl;
     local_partition.resize(new_size);
+    auto resize_end = chrono::high_resolution_clock::now();
     vector<int> partition_sizes_recv = receive_partitions(num_workers, local_partition, local_size);
+    auto shuffle_recv_end = chrono::high_resolution_clock::now();
 
     send_thread.join();
     auto shuffle_end = chrono::high_resolution_clock::now();
@@ -278,7 +279,7 @@ int main(int argc, char *argv[]) {
     auto verify_sorted_end = chrono::high_resolution_clock::now();
 
     cout << "Local sort: " << get_time(sort_start, sort_end) << endl;
-    cout << "Shuffle: " << get_time(shuffle_start, shuffle_end) << endl;
+    cout << "Shuffle: total: " << get_time(shuffle_start, shuffle_end) << ", recv: " << get_time(shuffle_start, shuffle_recv_end) << ", resize: " << get_time(shuffle_start, resize_end) << endl;
     cout << "Merge: " << get_time(merge_start, merge_end) << endl;
     cout << "Total time: " << get_time(start, merge_end) << " ms" << endl;
 

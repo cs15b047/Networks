@@ -267,8 +267,8 @@ static int accept_client_connection(struct Client* client)
 	memcpy(&remote_sockaddr /* where to save */, 
 			rdma_get_peer_addr(client->cm_client_id) /* gives you remote sockaddr */, 
 			sizeof(struct sockaddr_in) /* max size */);
-	printf("A new connection is accepted from %s \n", 
-			inet_ntoa(remote_sockaddr.sin_addr));
+	// printf("A new connection is accepted from %s \n", 
+	// 		inet_ntoa(remote_sockaddr.sin_addr));
 	return ret;
 }
 
