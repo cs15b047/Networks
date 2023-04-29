@@ -99,35 +99,14 @@ static char *conf_file = NULL;
 static int backlog = -1;
 /*----------------------------------------------------------------------------*/
 const char *www_main;
-static struct file_cache fcache[MAX_FILES];
-static int nfiles;
 /*----------------------------------------------------------------------------*/
 static int finished;
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
 static int 
-HandleReadEvent(struct thread_context *ctx, int sockid, struct server_vars *sv);
-/*----------------------------------------------------------------------------*/
-static int 
-SendUntilAvailable(struct thread_context *ctx, int sockid, struct server_vars *sv);
+ServerRead(struct thread_context *ctx, int sockid);
 
-static char *
-StatusCodeToString(int scode)
-{
-	switch (scode) {
-		case 200:
-			return "OK";
-			break;
-
-		case 404:
-			return "Not Found";
-			break;
-	}
-
-	return NULL;
-}
-/*----------------------------------------------------------------------------*/
 void
 CleanServerVariable(struct server_vars *sv)
 {
@@ -348,8 +327,7 @@ RunServerThread(void *arg)
 						&ctx->svars[events[i].data.sockid]);
 
 			} else if (events[i].events & MTCP_EPOLLIN) {
-				ret = HandleReadEvent(ctx, events[i].data.sockid, 
-						&ctx->svars[events[i].data.sockid]);
+				ret = ServerRead(ctx, events[i].data.sockid);
 
 				if (ret == 0) {
 					/* connection closed by remote host */
@@ -364,13 +342,13 @@ RunServerThread(void *arg)
 				}
 
 			} else if (events[i].events & MTCP_EPOLLOUT) {
-				struct server_vars *sv = &ctx->svars[events[i].data.sockid];
-				if (sv->rspheader_sent) {
-					SendUntilAvailable(ctx, events[i].data.sockid, sv);
-				} else {
-					TRACE_APP("Socket %d: Response header not sent yet.\n", 
-							events[i].data.sockid);
-				}
+				// struct server_vars *sv = &ctx->svars[events[i].data.sockid];
+				// if (sv->rspheader_sent) {
+				// 	SendUntilAvailable(ctx, events[i].data.sockid, sv);
+				// } else {
+				// 	TRACE_APP("Socket %d: Response header not sent yet.\n", 
+				// 			events[i].data.sockid);
+				// }
 
 			} else {
 				assert(0);

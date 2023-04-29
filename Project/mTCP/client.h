@@ -80,7 +80,6 @@ static in_addr_t saddr;
 /*----------------------------------------------------------------------------*/
 static int total_flows;
 static int flows[MAX_CPUS];
-static int flowcnt = 0;
 static int concurrency;
 static int max_fds;
 static uint64_t response_size = 0;
@@ -144,10 +143,10 @@ static struct wget_stat *g_stat[MAX_CPUS] = {0};
 
 /*----------------------------------------------------------------------------*/
 static inline int
-HandleReadEvent(thread_context_t ctx, int sockid, struct wget_vars *wv);
+ClientRead(thread_context_t ctx, int sockid);
 /*----------------------------------------------------------------------------*/
 static inline int 
-SendHTTPRequest(thread_context_t ctx, int sockid, struct wget_vars *wv);
+ClientWrite(thread_context_t ctx, int sockid);
 
 thread_context_t 
 CreateContext(int core)
@@ -490,14 +489,14 @@ RunWgetMain(void *arg)
 				CloseConnection(ctx, events[i].data.sockid);
 
 			} else if (events[i].events & MTCP_EPOLLIN) {
-				HandleReadEvent(ctx, 
-						events[i].data.sockid, &wvars[events[i].data.sockid]);
+				ClientRead(ctx, 
+						events[i].data.sockid);
 
 			} else if (events[i].events == MTCP_EPOLLOUT) {
 				struct wget_vars *wv = &wvars[events[i].data.sockid];
 
 				if (!wv->request_sent) {
-					SendHTTPRequest(ctx, events[i].data.sockid, wv);
+					ClientWrite(ctx, events[i].data.sockid);
 				} else {
 					//TRACE_DBG("Request already sent.\n");
 				}
@@ -553,11 +552,12 @@ int ParseArgs(int argc, char **argv) {
 		return FALSE;
 	}
 
-	daddr = inet_addr(SERV_ADDR);
+	strncpy(host, SERV_ADDR, MAX_IP_STR_LEN);
+	daddr = inet_addr(host);
 	dport = htons(SERV_PORT);
 	saddr = INADDR_ANY;
 
-	total_flows = mystrtol(argv[2], 10);
+	total_flows = atoi(argv[1]);
 	if (total_flows <= 0) {
 		TRACE_CONFIG("Number of flows should be large than 0.\n");
 		return FALSE;
