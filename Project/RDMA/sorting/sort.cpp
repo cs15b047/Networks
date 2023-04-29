@@ -41,13 +41,13 @@ void setup_client(int dst_rank, struct Connection* conn_state) {
     // cout << ret << endl;
 }
 
-void send_partition(vector<int*>& partition_starts, vector<int> partition_sizes, int rank, int num_workers) {
+void send_partition(vector<Record*>& partition_starts, vector<int> partition_sizes, int rank, int num_workers) {
     cout << "Step 3: Sending partition pieces to all workers" << endl;
     for(int dst_rank = 0; dst_rank < num_workers; dst_rank++) {
         if(dst_rank == rank) continue;
         // cout << "Sending partition to rank " << dst_rank << endl;
         // cout << ret << endl;
-        int ret = client_xchange_metadata_with_server((char *)partition_starts[dst_rank], (size_t)(partition_sizes[dst_rank] * sizeof(int)), conn_state[dst_rank]);
+        int ret = client_xchange_metadata_with_server((char *)partition_starts[dst_rank], (size_t)(partition_sizes[dst_rank] * sizeof(Record)), conn_state[dst_rank]);
         // cout << ret << endl;
         ret = client_remote_memory_ops(conn_state[dst_rank]);
         // cout << ret << endl;
@@ -63,7 +63,7 @@ void setup_server(int rank) {
     int ret = start_rdma_server(&serv_addr);
 }
 
-vector<int> receive_partitions(int num_workers, vector<int>& merged_arr, uint64_t recv_ptr) {
+vector<int> receive_partitions(int num_workers, vector<Record>& merged_arr, uint64_t recv_ptr) {
     vector<int> partition_sizes(num_workers);
     partition_sizes[0] = recv_ptr;
 
@@ -73,7 +73,7 @@ vector<int> receive_partitions(int num_workers, vector<int>& merged_arr, uint64_
         
         uint32_t partition_size = 0, bytes_to_recv;
         int ret = send_server_metadata_to_client((char *) (merged_arr.data() + recv_ptr), bytes_to_recv, client);
-        partition_size = bytes_to_recv / sizeof(int);
+        partition_size = bytes_to_recv / sizeof(Record);
         partition_sizes[i] = partition_size;
         recv_ptr += (uint64_t)partition_size;
         // cout << "Received partition of size " << partition_size << endl;
@@ -160,7 +160,7 @@ int main(int argc, char *argv[]) {
     // Step 0 - Generate random input
     auto start = chrono::high_resolution_clock::now();
 
-    vector<int> partition(partition_size);
+    vector<Record> partition(partition_size);
     generate_random_input(partition, partition_size);
     
     auto gen_random_input_end = chrono::high_resolution_clock::now();
@@ -184,7 +184,7 @@ int main(int argc, char *argv[]) {
     cout << "Step 1- Local sort done" << endl;
 
     // Step 2 - Divide the data into num_workers partitions based on data value
-    vector<int*> partition_starts;
+    vector<Record*> partition_starts;
     vector<int> partition_sizes;
     auto partition_start = chrono::high_resolution_clock::now();
     partition_data(partition, partition_starts, partition_sizes, num_workers);
@@ -206,7 +206,7 @@ int main(int argc, char *argv[]) {
     // Step 3.2 - Receive data from other workers
     uint64_t new_size = 2 * N/num_workers;
     // change partition to only contain local data:
-    vector<int> local_partition = vector<int>(partition_starts[rank], partition_starts[rank] + partition_sizes[rank]);
+    vector<Record> local_partition = vector<Record>(partition_starts[rank], partition_starts[rank] + partition_sizes[rank]);
     uint64_t local_size = local_partition.size();
     // print_partition(local_partition);
     // cout << "Local partition size: " << local_size << endl;
@@ -220,7 +220,7 @@ int main(int argc, char *argv[]) {
 
     // Step 4- merge all partitions
     uint64_t local_size_recv = local_partition.size();
-    vector<int> result(local_size_recv);
+    vector<Record> result(local_size_recv);
     auto merge_start = chrono::high_resolution_clock::now();
     merge(local_partition, partition_sizes_recv, num_workers, result);
     auto merge_end = chrono::high_resolution_clock::now();
