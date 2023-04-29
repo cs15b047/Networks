@@ -9,7 +9,7 @@
 
 using namespace std;
 
-string ip_addr;
+vector<string> ip_addr;
 
 void generate_random_input(vector<int>& partition, int partition_size) {
     // Generate random input
@@ -26,11 +26,12 @@ struct sockaddr_in generate_server_info(int rank){
     return serv_addr;
 }
 
-struct sockaddr_in get_server_info(string& ip_addr, int rank){
+struct sockaddr_in get_server_info(int rank){
     struct sockaddr_in serv_addr;
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(DEFAULT_RDMA_PORT + rank);
-    serv_addr.sin_addr.s_addr = inet_addr(ip_addr.c_str());
+    int idx = rank % ip_addr.size();
+    serv_addr.sin_addr.s_addr = inet_addr(ip_addr[idx].c_str());
     return serv_addr;
 }
 
@@ -40,15 +41,17 @@ void print_partition(vector<int>& partition) {
 }
 
 void setup_client(int dst_rank) {
-    struct sockaddr_in serv_addr = get_server_info(ip_addr, dst_rank);
+    struct sockaddr_in serv_addr = get_server_info(dst_rank);
     int ret = client_prepare_connection(&serv_addr);
     ret = client_pre_post_recv_buffer(); 
     cout << ret << endl;
 }
 
-void send_partition(vector<int*>& partition_starts, vector<int> partition_sizes, int rank, int num_workers, string& ip_addr) {
+void send_partition(vector<int*>& partition_starts, vector<int> partition_sizes, int rank, int num_workers) {
     cout << "Step 3: Sending partition pieces to all workers" << endl;
     for(int dst_rank = 0; dst_rank < num_workers; dst_rank++) {
+        if(dst_rank == rank) continue;
+        cout << "Sending partition to rank " << dst_rank << endl;
         setup_client(dst_rank);
         int ret = client_connect_to_server();
         cout << ret << endl;
@@ -181,6 +184,10 @@ void partition_data(vector<int>& data, vector<int*>& partition_starts, vector<in
     }
 }
 
+long get_time(chrono::high_resolution_clock::time_point start, chrono::high_resolution_clock::time_point end) {
+    return chrono::duration_cast<chrono::milliseconds>(end - start).count();
+}
+
 int main(int argc, char *argv[]) {
 
     if(argc != 5) {
@@ -192,8 +199,18 @@ int main(int argc, char *argv[]) {
     srand(time(NULL));
     num_workers = atoi(argv[1]);
     N = atol(argv[2]);
-    ip_addr = string(argv[3]);
+    ip_addr.clear();
+    string ip_addr_str = string(argv[3]);
+    stringstream ss(ip_addr_str);
+    while(ss.good()) {
+        string substr;
+        getline(ss, substr, ',');
+        ip_addr.push_back(substr);
+    }
     rank = atoi(argv[4]);
+
+    // Ranks are attached 
+
 
     long partition_size = N / num_workers;
     if (rank == num_workers - 1) {
@@ -203,27 +220,37 @@ int main(int argc, char *argv[]) {
     // Start server to receive data from other workers
     if(num_workers > 1) setup_server(rank);
 
+    // Step 0 - Generate random input
+    auto start = chrono::high_resolution_clock::now();
+
     vector<int> partition(partition_size);
     generate_random_input(partition, partition_size);
+    
+    auto gen_random_input_end = chrono::high_resolution_clock::now();
 
     cout << "Random input generated. Starting partition sort" << endl;
     cout << "Partition size = " << partition.size() << endl;
 
     // Step 1- sort local data
+    auto sort_start = chrono::high_resolution_clock::now();
     sort(partition.begin(), partition.end());
+    auto sort_end = chrono::high_resolution_clock::now();
     cout << "Step 1- Local sort done" << endl;
 
     // Step 2 - Divide the data into num_workers partitions based on data value
     vector<int*> partition_starts;
     vector<int> partition_sizes;
+    auto partition_start = chrono::high_resolution_clock::now();
     partition_data(partition, partition_starts, partition_sizes, num_workers);
+    auto partition_end = chrono::high_resolution_clock::now();
     assert(verify_partitioning(partition_sizes, partition_size));
+    auto verify_partitioning_end = chrono::high_resolution_clock::now();
     cout << "Step 2- Partitioning done" << endl;
 
     // Step 3.1 - Send data to other workers
-    // lambda function 
+    auto shuffle_start = chrono::high_resolution_clock::now();
     thread send_thread = thread([&]() {
-        send_partition(partition_starts, partition_sizes, rank, num_workers, ip_addr);
+        send_partition(partition_starts, partition_sizes, rank, num_workers);
     });
 
     // Step 3.2 - Receive data from other workers
@@ -237,14 +264,21 @@ int main(int argc, char *argv[]) {
     vector<int> partition_sizes_recv = receive_partitions(num_workers, local_partition, local_size);
 
     send_thread.join();
+    auto shuffle_end = chrono::high_resolution_clock::now();
 
     // Step 4- merge all partitions
     uint64_t local_size_recv = local_partition.size();
     vector<int> result(local_size_recv);
+    auto merge_start = chrono::high_resolution_clock::now();
     merge(local_partition, partition_sizes_recv, num_workers, result);
+    auto merge_end = chrono::high_resolution_clock::now();
     assert(verify_sorted(result));
+    auto verify_sorted_end = chrono::high_resolution_clock::now();
 
-    sleep(5);
+    cout << "Local sort: " << get_time(sort_start, sort_end) << endl;
+    cout << "Shuffle: " << get_time(shuffle_start, shuffle_end) << endl;
+    cout << "Merge: " << get_time(merge_start, merge_end) << endl;
+    cout << "Total time: " << get_time(start, merge_end) << " ms" << endl;
 
     cout << "Exiting process " << rank << endl;
 }
