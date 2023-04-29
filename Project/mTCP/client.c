@@ -17,7 +17,6 @@ ClientWrite(thread_context_t ctx, int sockid)
 				"try: %d, sent: %d\n", sockid, len, wr);
 	}
 
-	ctx->stat.writes += wr;
 	TRACE_APP("Socket %d HTTP Request of %d bytes. sent.\n", sockid, wr);
 
 	ev.events = MTCP_EPOLLIN;
@@ -42,13 +41,11 @@ ClientRead(thread_context_t ctx, int sockid)
 
 		printf("Received %d bytes\n", rd);
 		printf("Received Message: %s\n", buf);
-		ctx->stat.reads += rd;
 		TRACE_APP("Socket %d received %d bytes.\n", sockid, rd);
 	}
 
 	if (rd == 0) {
 		TRACE_DBG("Socket %d connection closed with server.\n", sockid);		
-		ctx->stat.errors++;
 		ctx->incompletes++;
 		CloseConnection(ctx, sockid);
 
@@ -56,7 +53,6 @@ ClientRead(thread_context_t ctx, int sockid)
 		if (errno != EAGAIN) {
 			TRACE_DBG("Socket %d: mtcp_read() error %s\n", 
 					sockid, strerror(errno));
-			ctx->stat.errors++;
 			ctx->errors++;
 			CloseConnection(ctx, sockid);
 		}

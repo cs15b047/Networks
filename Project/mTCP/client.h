@@ -82,23 +82,6 @@ static int total_flows;
 static int flows[MAX_CPUS];
 static int concurrency;
 static int max_fds;
-static uint64_t response_size = 0;
-/*----------------------------------------------------------------------------*/
-struct wget_stat
-{
-	uint64_t waits;
-	uint64_t events;
-	uint64_t connects;
-	uint64_t reads;
-	uint64_t writes;
-	uint64_t completes;
-
-	uint64_t errors;
-	uint64_t timedout;
-
-	uint64_t sum_resp_time;
-	uint64_t max_resp_time;
-};
 /*----------------------------------------------------------------------------*/
 struct thread_context
 {
@@ -106,7 +89,6 @@ struct thread_context
 
 	mctx_t mctx;
 	int ep;
-	struct wget_vars *wvars;
 
 	int target;
 	int started;
@@ -114,31 +96,10 @@ struct thread_context
 	int incompletes;
 	int done;
 	int pending;
-
-	struct wget_stat stat;
 };
 typedef struct thread_context* thread_context_t;
 /*----------------------------------------------------------------------------*/
-struct wget_vars
-{
-	int request_sent;
-
-	char response[HTTP_HEADER_LEN];
-	int resp_len;
-	int headerset;
-	uint32_t header_len;
-	uint64_t file_len;
-	uint64_t recv;
-	uint64_t write;
-
-	struct timeval t_start;
-	struct timeval t_end;
-	
-	int fd;
-};
-/*----------------------------------------------------------------------------*/
 static struct thread_context *g_ctx[MAX_CPUS] = {0};
-static struct wget_stat *g_stat[MAX_CPUS] = {0};
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
@@ -175,7 +136,6 @@ CreateContext(int core)
 void 
 DestroyContext(thread_context_t ctx) 
 {
-	g_stat[ctx->core] = NULL;
 	mtcp_destroy_context(ctx->mctx);
 	free(ctx);
 }
@@ -194,7 +154,7 @@ CreateConnection(thread_context_t ctx)
 		TRACE_INFO("Failed to create socket!\n");
 		return -1;
 	}
-	memset(&ctx->wvars[sockid], 0, sizeof(struct wget_vars));
+
 	ret = mtcp_setsock_nonblock(mctx, sockid);
 	if (ret < 0) {
 		TRACE_ERROR("Failed to set socket in nonblocking mode.\n");
@@ -217,7 +177,6 @@ CreateConnection(thread_context_t ctx)
 
 	ctx->started++;
 	ctx->pending++;
-	ctx->stat.connects++;
 
 	ev.events = MTCP_EPOLLOUT;
 	ev.data.sockid = sockid;
@@ -242,136 +201,9 @@ CloseConnection(thread_context_t ctx, int sockid)
 	}
 }
 
-/*----------------------------------------------------------------------------*/
-static inline int 
-DownloadComplete(thread_context_t ctx, int sockid, struct wget_vars *wv)
-{
-#ifdef APP
-	mctx_t mctx = ctx->mctx;
-#endif
-	uint64_t tdiff;
 
-	TRACE_APP("Socket %d File download complete!\n", sockid);
-	gettimeofday(&wv->t_end, NULL);
-	CloseConnection(ctx, sockid);
-	ctx->stat.completes++;
-	if (response_size == 0) {
-		response_size = wv->recv;
-		fprintf(stderr, "Response size set to %lu\n", response_size);
-	} else {
-		if (wv->recv != response_size) {
-			fprintf(stderr, "Response size mismatch! mine: %lu, theirs: %lu\n", 
-					wv->recv, response_size);
-		}
-	}
-	tdiff = (wv->t_end.tv_sec - wv->t_start.tv_sec) * 1000000 + 
-			(wv->t_end.tv_usec - wv->t_start.tv_usec);
-	TRACE_APP("Socket %d Total received bytes: %lu (%luMB)\n", 
-			sockid, wv->recv, wv->recv / 1000000);
-	TRACE_APP("Socket %d Total spent time: %lu us\n", sockid, tdiff);
-	if (tdiff > 0) {
-		TRACE_APP("Socket %d Average bandwidth: %lf[MB/s]\n", 
-				sockid, (double)wv->recv / tdiff);
-	}
-	ctx->stat.sum_resp_time += tdiff;
-	if (tdiff > ctx->stat.max_resp_time)
-		ctx->stat.max_resp_time = tdiff;
-
-	if (fio && wv->fd > 0)
-		close(wv->fd);
-
-	return 0;
-}
-
-/*----------------------------------------------------------------------------*/
-#if 0
-void 
-PrintStats()
-{
-#define LINE_LEN 2048
-	char line[LINE_LEN];
-	int total_trans;
-	int i;
-
-	total_trans = 0;
-	line[0] = '\0';
-	//sprintf(line, "Trans/s: ");
-	for (i = 0; i < core_limit; i++) {
-		//sprintf(line + strlen(line), "%6d  ", g_trans[i]);
-		sprintf(line + strlen(line), "[CPU%2d] %7d trans/s  ", i, g_trans[i]);
-		total_trans += g_trans[i];
-		g_trans[i] = 0;
-		if (i % 4 == 3)
-			sprintf(line + strlen(line), "\n");
-	}
-	fprintf(stderr, "%s", line);
-	fprintf(stderr, "[ ALL ] %7d trans/s\n", total_trans);
-	//sprintf(line + strlen(line), "total: %6d", total_trans);
-	//printf("%s\n", line);
-
-	//fprintf(stderr, "Transactions/s: %d\n", total_trans);
-	fflush(stderr);
-}
-#endif
-/*----------------------------------------------------------------------------*/
-static void 
-PrintStats()
-{
-	struct wget_stat total = {0};
-	struct wget_stat *st;
-	uint64_t avg_resp_time;
-	uint64_t total_resp_time = 0;
-	int i;
-
-	for (i = 0; i < core_limit; i++) {
-		st = g_stat[i];
-
-		if (st == NULL) continue;
-		avg_resp_time = st->completes? st->sum_resp_time / st->completes : 0;
-#if 0
-		fprintf(stderr, "[CPU%2d] epoll_wait: %5lu, event: %7lu, "
-				"connect: %7lu, read: %4lu MB, write: %4lu MB, "
-				"completes: %7lu (resp_time avg: %4lu, max: %6lu us), "
-				"errors: %2lu (timedout: %2lu)\n", 
-				i, st->waits, st->events, st->connects, 
-				st->reads / 1024 / 1024, st->writes / 1024 / 1024, 
-				st->completes, avg_resp_time, st->max_resp_time, 
-				st->errors, st->timedout);
-#endif
-
-		total.waits += st->waits;
-		total.events += st->events;
-		total.connects += st->connects;
-		total.reads += st->reads;
-		total.writes += st->writes;
-		total.completes += st->completes;
-		total_resp_time += avg_resp_time;
-		if (st->max_resp_time > total.max_resp_time)
-			total.max_resp_time = st->max_resp_time;
-		total.errors += st->errors;
-		total.timedout += st->timedout;
-
-		memset(st, 0, sizeof(struct wget_stat));		
-	}
-	fprintf(stderr, "[ ALL ] connect: %7lu, read: %4lu MB, write: %4lu MB, "
-			"completes: %7lu (resp_time avg: %4lu, max: %6lu us)\n", 
-			total.connects, 
-			total.reads / 1024 / 1024, total.writes / 1024 / 1024, 
-			total.completes, total_resp_time / core_limit, total.max_resp_time);
-#if 0
-	fprintf(stderr, "[ ALL ] epoll_wait: %5lu, event: %7lu, "
-			"connect: %7lu, read: %4lu MB, write: %4lu MB, "
-			"completes: %7lu (resp_time avg: %4lu, max: %6lu us), "
-			"errors: %2lu (timedout: %2lu)\n", 
-			total.waits, total.events, total.connects, 
-			total.reads / 1024 / 1024, total.writes / 1024 / 1024, 
-			total.completes, total_resp_time / core_limit, total.max_resp_time, 
-			total.errors, total.timedout);
-#endif
-}
-/*----------------------------------------------------------------------------*/
 void *
-RunWgetMain(void *arg)
+RunClientLoop(void *arg)
 {
 	thread_context_t ctx;
 	mctx_t mctx;
@@ -381,7 +213,6 @@ RunWgetMain(void *arg)
 	int ep;
 	struct mtcp_epoll_event *events;
 	int nevents;
-	struct wget_vars *wvars;
 	int i;
 
 	struct timeval cur_tv, prev_tv;
@@ -395,7 +226,6 @@ RunWgetMain(void *arg)
 	}
 	mctx = ctx->mctx;
 	g_ctx[core] = ctx;
-	g_stat[core] = &ctx->stat;
 	srand(time(NULL));
 
 	mtcp_init_rss(mctx, saddr, IP_RANGE, daddr, dport);
@@ -427,13 +257,6 @@ RunWgetMain(void *arg)
 	}
 	ctx->ep = ep;
 
-	wvars = (struct wget_vars *)calloc(max_fds, sizeof(struct wget_vars));
-	if (!wvars) {
-		TRACE_ERROR("Failed to create wget variables!\n");
-		exit(EXIT_FAILURE);
-	}
-	ctx->wvars = wvars;
-
 	ctx->started = ctx->done = ctx->pending = 0;
 	ctx->errors = ctx->incompletes = 0;
 
@@ -447,7 +270,6 @@ RunWgetMain(void *arg)
 
 		/* print statistics every second */
 		if (core == 0 && cur_tv.tv_sec > prev_tv.tv_sec) {
-		  	PrintStats();
 			prev_tv = cur_tv;
 		}
 
@@ -459,7 +281,6 @@ RunWgetMain(void *arg)
 		}
 
 		nevents = mtcp_epoll_wait(mctx, ep, events, maxevents, -1);
-		ctx->stat.waits++;
 	
 		if (nevents < 0) {
 			if (errno != EINTR) {
@@ -468,39 +289,21 @@ RunWgetMain(void *arg)
 			done[core] = TRUE;
 			break;
 		} else {
-			ctx->stat.events += nevents;
 		}
 
 		for (i = 0; i < nevents; i++) {
 
 			if (events[i].events & MTCP_EPOLLERR) {
-				int err;
-				socklen_t len = sizeof(err);
 
 				TRACE_APP("[CPU %d] Error on socket %d\n", 
 						core, events[i].data.sockid);
-				ctx->stat.errors++;
 				ctx->errors++;
-				if (mtcp_getsockopt(mctx, events[i].data.sockid, 
-							SOL_SOCKET, SO_ERROR, (void *)&err, &len) == 0) {
-					if (err == ETIMEDOUT)
-						ctx->stat.timedout++;
-				}
 				CloseConnection(ctx, events[i].data.sockid);
 
 			} else if (events[i].events & MTCP_EPOLLIN) {
-				ClientRead(ctx, 
-						events[i].data.sockid);
-
+				ClientRead(ctx, events[i].data.sockid);
 			} else if (events[i].events == MTCP_EPOLLOUT) {
-				struct wget_vars *wv = &wvars[events[i].data.sockid];
-
-				if (!wv->request_sent) {
-					ClientWrite(ctx, events[i].data.sockid);
-				} else {
-					//TRACE_DBG("Request already sent.\n");
-				}
-
+				ClientWrite(ctx, events[i].data.sockid);
 			} else {
 				TRACE_ERROR("Socket %d: event: %s\n", 
 						events[i].data.sockid, EventToString(events[i].events));
@@ -569,9 +372,8 @@ int ParseArgs(int argc, char **argv) {
 int ClientSetup() {
     num_cores = GetNumCPUs();
 	core_limit = 8;
-	concurrency = 100;
+	concurrency = 1;
     conf_file = "./conf/client.conf";
-
 
     if (core_limit > num_cores) {
         TRACE_CONFIG("CPU limit should be smaller than the "
@@ -645,7 +447,7 @@ void ClientStart() {
 			continue;
 
 		if (pthread_create(&app_thread[i], 
-					NULL, RunWgetMain, (void *)&cores[i])) {
+					NULL, RunClientLoop, (void *)&cores[i])) {
 			perror("pthread_create");
 			TRACE_ERROR("Failed to create wget thread.\n");
 			exit(-1);

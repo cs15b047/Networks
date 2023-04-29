@@ -60,34 +60,10 @@
 
 
 /*----------------------------------------------------------------------------*/
-struct file_cache
-{
-	char name[NAME_LIMIT];
-	char fullname[FULLNAME_LIMIT];
-	uint64_t size;
-	char *file;
-};
-/*----------------------------------------------------------------------------*/
-struct server_vars
-{
-	char request[HTTP_HEADER_LEN];
-	int recv_len;
-	int request_len;
-	long int total_read, total_sent;
-	uint8_t done;
-	uint8_t rspheader_sent;
-	uint8_t keep_alive;
-
-	int fidx;						// file cache index
-	char fname[NAME_LIMIT];				// file name
-	long int fsize;					// file size
-};
-/*----------------------------------------------------------------------------*/
 struct thread_context
 {
 	mctx_t mctx;
 	int ep;
-	struct server_vars *svars;
 };
 /*----------------------------------------------------------------------------*/
 static int num_cores;
@@ -98,8 +74,6 @@ static int done[MAX_CPUS];
 static char *conf_file = NULL;
 static int backlog = -1;
 /*----------------------------------------------------------------------------*/
-const char *www_main;
-/*----------------------------------------------------------------------------*/
 static int finished;
 /*----------------------------------------------------------------------------*/
 
@@ -107,20 +81,9 @@ static int finished;
 static int 
 ServerRead(struct thread_context *ctx, int sockid);
 
-void
-CleanServerVariable(struct server_vars *sv)
-{
-	sv->recv_len = 0;
-	sv->request_len = 0;
-	sv->total_read = 0;
-	sv->total_sent = 0;
-	sv->done = 0;
-	sv->rspheader_sent = 0;
-	sv->keep_alive = 0;
-}
 /*----------------------------------------------------------------------------*/
 void 
-CloseConnection(struct thread_context *ctx, int sockid, struct server_vars *sv)
+CloseConnection(struct thread_context *ctx, int sockid)
 {
 	mtcp_epoll_ctl(ctx->mctx, ctx->ep, MTCP_EPOLL_CTL_DEL, sockid, NULL);
 	mtcp_close(ctx->mctx, sockid);
@@ -131,7 +94,6 @@ int
 AcceptConnection(struct thread_context *ctx, int listener)
 {
 	mctx_t mctx = ctx->mctx;
-	struct server_vars *sv;
 	struct mtcp_epoll_event ev;
 	int c;
 
@@ -143,8 +105,6 @@ AcceptConnection(struct thread_context *ctx, int listener)
 			return -1;
 		}
 
-		sv = &ctx->svars[c];
-		CleanServerVariable(sv);
 		TRACE_APP("New connection %d accepted.\n", c);
 		ev.events = MTCP_EPOLLIN;
 		ev.data.sockid = c;
@@ -194,17 +154,6 @@ InitializeServerThread(int core)
 		mtcp_destroy_context(ctx->mctx);
 		free(ctx);
 		TRACE_ERROR("Failed to create epoll descriptor!\n");
-		return NULL;
-	}
-
-	/* allocate memory for server variables */
-	ctx->svars = (struct server_vars *)
-			calloc(MAX_FLOW_NUM, sizeof(struct server_vars));
-	if (!ctx->svars) {
-		mtcp_close(ctx->mctx, ctx->ep);
-		mtcp_destroy_context(ctx->mctx);
-		free(ctx);
-		TRACE_ERROR("Failed to create server_vars struct!\n");
 		return NULL;
 	}
 
@@ -258,7 +207,7 @@ CreateListeningSocket(struct thread_context *ctx)
 }
 /*----------------------------------------------------------------------------*/
 void *
-RunServerThread(void *arg)
+RunServerLoop(void *arg)
 {
 	int core = *(int *)arg;
 	struct thread_context *ctx;
@@ -323,26 +272,22 @@ RunServerThread(void *arg)
 				} else {
 					perror("mtcp_getsockopt");
 				}
-				CloseConnection(ctx, events[i].data.sockid, 
-						&ctx->svars[events[i].data.sockid]);
+				CloseConnection(ctx, events[i].data.sockid);
 
 			} else if (events[i].events & MTCP_EPOLLIN) {
 				ret = ServerRead(ctx, events[i].data.sockid);
 
 				if (ret == 0) {
 					/* connection closed by remote host */
-					CloseConnection(ctx, events[i].data.sockid, 
-							&ctx->svars[events[i].data.sockid]);
+					CloseConnection(ctx, events[i].data.sockid);
 				} else if (ret < 0) {
 					/* if not EAGAIN, it's an error */
 					if (errno != EAGAIN) {
-						CloseConnection(ctx, events[i].data.sockid, 
-								&ctx->svars[events[i].data.sockid]);
+						CloseConnection(ctx, events[i].data.sockid);
 					}
 				}
 
 			} else if (events[i].events & MTCP_EPOLLOUT) {
-				// struct server_vars *sv = &ctx->svars[events[i].data.sockid];
 				// if (sv->rspheader_sent) {
 				// 	SendUntilAvailable(ctx, events[i].data.sockid, sv);
 				// } else {
@@ -456,7 +401,7 @@ void ServerStart() {
 		done[i] = FALSE;
 		
 		if (pthread_create(&app_thread[i], 
-				   NULL, RunServerThread, (void *)&cores[i])) {
+				   NULL, RunServerLoop, (void *)&cores[i])) {
 			perror("pthread_create");
 			TRACE_CONFIG("Failed to create server thread.\n");
 				exit(EXIT_FAILURE);
