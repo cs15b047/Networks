@@ -1,4 +1,4 @@
-#include "../common/client.h"
+#include <common/client.h>
 #include "utils.h"
 #include <bits/stdc++.h>
 
@@ -80,7 +80,8 @@ ClientRead(thread_context_t ctx, int sockid)
 int 
 main(int argc, char **argv)
 {    
-    ret = ClientSetup(SERV_ADDR, SERV_PORT);
+	char *host = const_cast<char*>(SERV_ADDR);
+    ret = ClientSetup(host, SERV_PORT);
     if (!ret) {
         TRACE_ERROR("Failed to setup client.\n");
         exit(EXIT_FAILURE);

@@ -1,4 +1,4 @@
-#include "../common/server.h"
+#include <common/server.h>
 #include "utils.h"
 #include <bits/stdc++.h>
 

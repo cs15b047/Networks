@@ -1,6 +1,7 @@
 # TODO: Make this Makefile.in pretty
 
 BASEDIR = /mnt/Work/mtcp
+MTCP_COMMON_INC = /mnt/Work/Networks/Project/mTCP
 BUILDDIR=./build
 
 TARGETS = server client
@@ -28,7 +29,7 @@ UTIL_INC = -I${UTIL_FLD}/include
 UTIL_OBJ = ${UTIL_FLD}/http_parsing.o ${UTIL_FLD}/tdate_parse.o ${UTIL_FLD}/netlib.o
 
 # util library and header
-INC = -I./include/ ${UTIL_INC} ${MTCP_INC} -I${UTIL_FLD}/include
+INC = -I./include/ ${UTIL_INC} ${MTCP_INC} -I${UTIL_FLD}/include -I${MTCP_COMMON_INC}
 LIBS = ${MTCP_LIB}
 
 # psio-specific variables

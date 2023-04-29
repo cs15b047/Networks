@@ -71,7 +71,6 @@ static int core_limit;
 static int fio = FALSE;
 static char outfile[FILE_LEN + 1];
 /*----------------------------------------------------------------------------*/
-static char host[MAX_IP_STR_LEN + 1] = {'\0'};
 static char url[MAX_URL_LEN + 1] = {'\0'};
 static in_addr_t daddr;
 static in_port_t dport;
