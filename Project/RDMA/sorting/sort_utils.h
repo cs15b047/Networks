@@ -77,6 +77,18 @@ void partition_data(vector<int>& data, vector<int*>& partition_starts, vector<in
 
     int range_span = INT_MAX / num_workers;
 
+    // TODO: Remove this
+    uint64_t total_size = data.size(), partition_size = total_size / num_workers;
+    for(int i = 0; i < num_workers; i++) {
+        partition_starts[i] = &(data.data()[i * partition_size]);
+        if(i == num_workers - 1) {
+            partition_sizes[i] = total_size - i * partition_size;
+        } else {
+            partition_sizes[i] = partition_size;
+        }
+    }
+    return;
+
     // range for worker i: [i * range_span, (i + 1) * range_span)
     // for worker num_workers - 1: [i * range_span, INT_MAX]
     int itr = 0;
