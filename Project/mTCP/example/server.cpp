@@ -1,4 +1,7 @@
 #include "server.h"
+#include <bits/stdc++.h>
+
+using namespace std;
 
 static int 
 ServerRead(struct thread_context *ctx, int sockid)
@@ -18,11 +21,18 @@ ServerRead(struct thread_context *ctx, int sockid)
 	printf("Received %d bytes\n", rd);
 	printf("Received Array Length: %d\n", arr_len);
 
-	int array[arr_len];
+	vector<int> array(arr_len);
 
-	rd = mtcp_read(ctx->mctx, sockid, (char *) &array, sizeof(int) * arr_len);
-	if (rd <= 0) {
-		return rd;
+	int bytes_to_read = arr_len * sizeof(int);
+	int recv_ptr = 0;
+	while (bytes_to_read > 0) {
+		rd = mtcp_read(ctx->mctx, sockid, (char *) (array.data() + recv_ptr), bytes_to_read);
+		if (rd <= 0) {
+			return rd;
+		}
+
+		bytes_to_read -= rd;
+		recv_ptr += rd / sizeof(int);
 	}
 
 	printf("Received %d bytes\n", rd);

@@ -1,11 +1,15 @@
 #include "client.h"
+#include <bits/stdc++.h>
 
+using namespace std;
 
-void create_random_array(int *array, int size) {
-	int i;
-	for (i = 0; i < size; i++) {
-		array[i] = rand() % 100;
+vector<int> create_random_array(int arr_len) {
+	vector<int> v;
+	for (int i = 0; i < arr_len; i++) {
+		v.push_back(rand() % 100);
 	}
+
+	return v;
 }
 
 static inline int 
@@ -15,8 +19,7 @@ ClientWrite(thread_context_t ctx, int sockid)
 	int wr;
 	int len;
 	int arr_len = 10;
-	int array[arr_len];
-	create_random_array(array, arr_len);
+	vector<int> array = create_random_array(arr_len);
 
 	wr = mtcp_write(ctx->mctx, sockid, (char*) &arr_len, sizeof(int));
 	if (wr < len) {
@@ -24,7 +27,7 @@ ClientWrite(thread_context_t ctx, int sockid)
 				"try: %d, sent: %d\n", sockid, len, wr);
 	}
 
-	wr = mtcp_write(ctx->mctx, sockid, (char*) array, arr_len * sizeof(int));
+	wr = mtcp_write(ctx->mctx, sockid, (char*) array.data(), arr_len * sizeof(int));
 	if (wr < len) {
 		TRACE_ERROR("Socket %d: Sending HTTP request failed. "
 				"try: %d, sent: %d\n", sockid, len, wr);

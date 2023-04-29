@@ -15,6 +15,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <limits.h>
+#include <thread>
 
 #include <mtcp_api.h>
 #include <mtcp_epoll.h>
@@ -334,6 +335,16 @@ SignalHandler(int signum)
 		}
 	}
 }
+
+int GetTotalCPUs() {
+	int num_cpus = sysconf(_SC_NPROCESSORS_ONLN);
+	if (num_cpus < 0) {
+		TRACE_ERROR("Failed to get number of CPUs.\n");
+		return -1;
+	}
+	return num_cpus;
+}
+
 /*----------------------------------------------------------------------------*/
 int ret;
 struct mtcp_conf mcfg;
@@ -342,10 +353,10 @@ int process_cpu;
 int i;
 
 int ServerSetup() {		
-	num_cores = GetNumCPUs();
+	num_cores = GetTotalCPUs();
 	core_limit = num_cores;
 	process_cpu = -1;
-	conf_file = "./conf/server.conf";
+	conf_file = const_cast<char*>("./conf/server.conf");
 
 	core_limit = 8;	
 	if (core_limit > num_cores) {

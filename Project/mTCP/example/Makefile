@@ -4,7 +4,7 @@ BASEDIR = /mnt/Work/mtcp
 BUILDDIR=./build
 
 TARGETS = server client
-CC=gcc -g -O3 -Wall -Werror -fgnu89-inline
+CC=g++ -g -O3 -Wall
 DPDK=1
 PS=0
 NETMAP=0
@@ -79,30 +79,27 @@ LIBS += -L$(LIBCCP) -lccp -lstartccp
 INC += -I$(LIBCCP)
 endif
 
-all: clean $(BUILDDIR) $(TARGETS) clean_o
+all : clean $(BUILDDIR) $(BUILDDIR)/server $(BUILDDIR)/client
 
-$(BUILDDIR):
+$(BUILDDIR) :
 	mkdir $(BUILDDIR)
 
-server.o: server.c
-	$(MSG) "   CC $<"
-	$(HIDE) ${CC} -c $< ${CFLAGS} ${INC} 
-server: server.o ${MTCP_FLD}/lib/libmtcp.a
+$(BUILDDIR)/server : $(BUILDDIR)/server.o ${MTCP_FLD}/lib/libmtcp.a
 	$(MSG) "   LD $<"
-	$(HIDE) ${CC} $< ${LIBS} ${UTIL_OBJ} -o $(BUILDDIR)/$@
+	$(HIDE) ${CC} $< ${LIBS} ${UTIL_OBJ} -o $@
 
-client.o: client.c
-	$(MSG) "   CC $<"
-	$(HIDE) ${CC} -c $< ${CFLAGS} ${INC}
-
-client: client.o ${MTCP_FLD}/lib/libmtcp.a
+$(BUILDDIR)/client : $(BUILDDIR)/client.o ${MTCP_FLD}/lib/libmtcp.a
 	$(MSG) "   LD $<"
-	$(HIDE) ${CC} $< ${LIBS} ${UTIL_OBJ} -o $(BUILDDIR)/$@
+	$(HIDE) ${CC} $< ${LIBS} ${UTIL_OBJ} -o $@
+
+$(BUILDDIR)/server.o : server.cpp
+	$(MSG) "   CC $<"
+	$(HIDE) ${CC} -c $< ${CFLAGS} ${INC} -o $@
+
+$(BUILDDIR)/client.o : client.cpp
+	$(MSG) "   CC $<"
+	$(HIDE) ${CC} -c $< ${CFLAGS} ${INC} -o $@
 
 clean:
-	$(MSG) "   CLEAN $(BUILDDIR)/$(TARGETS)"
-	$(HIDE) rm -rf *~ $(BUILDDIR) log_* 
-
-clean_o:
-	$(MSG) "   CLEAN *.o"
-	$(HIDE) rm -rf *.o
+	$(MSG) "   CLEAN $(BUILDDIR) log_*"
+	$(HIDE) rm -rf *~ $(BUILDDIR) log_*

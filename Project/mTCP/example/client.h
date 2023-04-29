@@ -369,11 +369,22 @@ int ParseArgs(int argc, char **argv) {
     return TRUE;
 }
 
+
+int GetTotalCPUs() {
+	int num_cpus = sysconf(_SC_NPROCESSORS_ONLN);
+	if (num_cpus < 0) {
+		TRACE_ERROR("Failed to get number of CPUs.\n");
+		return -1;
+	}
+	return num_cpus;
+}
+
+
 int ClientSetup() {
-    num_cores = GetNumCPUs();
+    num_cores = GetTotalCPUs();
 	core_limit = 1;
 	concurrency = 1;
-    conf_file = "./conf/client.conf";
+    conf_file = const_cast<char*>("./conf/client.conf");
 
     if (core_limit > num_cores) {
         TRACE_CONFIG("CPU limit should be smaller than the "
