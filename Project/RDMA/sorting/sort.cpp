@@ -18,18 +18,18 @@ void generate_random_input(vector<int>& partition, int partition_size) {
     });
 }
 
-struct sockaddr_in generate_server_info(){
+struct sockaddr_in generate_server_info(int rank){
     struct sockaddr_in serv_addr;
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(DEFAULT_RDMA_PORT);
+    serv_addr.sin_port = htons(DEFAULT_RDMA_PORT + rank);
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     return serv_addr;
 }
 
-struct sockaddr_in get_server_info(string& ip_addr){
+struct sockaddr_in get_server_info(string& ip_addr, int rank){
     struct sockaddr_in serv_addr;
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(DEFAULT_RDMA_PORT);
+    serv_addr.sin_port = htons(DEFAULT_RDMA_PORT + rank);
     serv_addr.sin_addr.s_addr = inet_addr(ip_addr.c_str());
     return serv_addr;
 }
@@ -39,38 +39,40 @@ void print_partition(vector<int>& partition) {
         cout << i << " -> " << partition[i] << endl;
 }
 
-void setup_client() {
-    struct sockaddr_in serv_addr = get_server_info(ip_addr);
+void setup_client(int dst_rank) {
+    struct sockaddr_in serv_addr = get_server_info(ip_addr, dst_rank);
     int ret = client_prepare_connection(&serv_addr);
     ret = client_pre_post_recv_buffer(); 
     cout << ret << endl;
 }
 
-void send_partition(vector<int>& partition, int partition_size, int rank, string& ip_addr) {
-    setup_client();
-
-    int ret = client_connect_to_server();
-    cout << ret << endl;
-    ret = client_xchange_metadata_with_server((char *)partition.data(), (size_t)(partition_size * sizeof(int)));
-    cout << ret << endl;
-    ret = client_remote_memory_ops();
-    cout << ret << endl;
-    // Send size first, then the partition
-    cout << "Sending partition of size " << partition_size << " to rank 0" << endl;
+void send_partition(vector<int*>& partition_starts, vector<int> partition_sizes, int rank, int num_workers, string& ip_addr) {
+    cout << "Step 3: Sending partition pieces to all workers" << endl;
+    for(int dst_rank = 0; dst_rank < num_workers; dst_rank++) {
+        setup_client(dst_rank);
+        int ret = client_connect_to_server();
+        cout << ret << endl;
+        ret = client_xchange_metadata_with_server((char *)partition_starts[dst_rank], (size_t)(partition_sizes[dst_rank] * sizeof(int)));
+        cout << ret << endl;
+        ret = client_remote_memory_ops();
+        cout << ret << endl;
+        // Send size first, then the partition
+        cout << "Sending partition of size " << partition_sizes[dst_rank] << " to rank " << dst_rank << endl;
+    }
 }
 
-void setup_server() {
-    struct sockaddr_in serv_addr = generate_server_info();
+void setup_server(int rank) {
+    struct sockaddr_in serv_addr = generate_server_info(rank);
+    cout << "Starting server" << endl;
     int ret = start_rdma_server(&serv_addr);
 }
 
 vector<int> receive_partitions(int num_workers, vector<int>& merged_arr, uint64_t recv_ptr) {
-    if(num_workers > 1) setup_server();
-
     vector<int> partition_sizes(num_workers);
     partition_sizes[0] = recv_ptr;
 
     vector<Client*> clients(num_workers, NULL);
+    cout << "Receiving partitions" << endl;
 
     for(int i = 1; i < num_workers; i++) {
         clients[i] = new Client();
@@ -95,8 +97,9 @@ vector<int> receive_partitions(int num_workers, vector<int>& merged_arr, uint64_
         cout << "Received partition of size " << partition_size << endl;
         cout << "Recv_ptr = " << recv_ptr << endl;
     }
-    cout << "Merged array size = " << merged_arr.size() << endl;
-    assert(recv_ptr == merged_arr.size());
+    cout << "Recv ptr: " << recv_ptr << ", Merged array size = " << merged_arr.size() << endl;
+    assert (recv_ptr <= merged_arr.size());
+    merged_arr.resize(recv_ptr);
 
     return partition_sizes;
 }
@@ -145,6 +148,38 @@ bool verify_sorted(vector<int>& arr) {
     return true;
 }
 
+bool verify_partitioning(vector<int>& partition_sizes, long N) {
+    long sum = 0;
+    int num_workers = partition_sizes.size();
+    cout << "Num workers: " <<  num_workers << endl;
+    for(int i = 0; i < num_workers; i++) {
+        sum += (long)partition_sizes[i];
+    }
+    cout << "Sum of sizes: " << sum << ", Expected size: " << N << endl;
+    return sum == N;
+}
+
+void partition_data(vector<int>& data, vector<int*>& partition_starts, vector<int>& partition_sizes, int num_workers) {
+    partition_starts.resize(num_workers, NULL);
+    partition_sizes.resize(num_workers, 0);
+
+    int range_span = INT_MAX / num_workers;
+
+    // range for worker i: [i * range_span, (i + 1) * range_span)
+    // for worker num_workers - 1: [i * range_span, INT_MAX]
+    int itr = 0;
+    for(int i = 0; i < num_workers; i++) {
+        int lower = i * range_span;
+        int upper = (i == num_workers - 1) ? INT_MAX : (i + 1) * range_span;
+        partition_starts[i] = &(data.data()[itr]);
+        if(i == num_workers - 1) {
+            partition_sizes[i] = (int)data.size() - itr;
+        } else {
+            partition_sizes[i] = upper_bound(data.begin() + itr, data.end(), upper) - (data.begin() + itr);
+        }
+        itr += partition_sizes[i];
+    }
+}
 
 int main(int argc, char *argv[]) {
 
@@ -152,16 +187,21 @@ int main(int argc, char *argv[]) {
         cout << "Usage: ./sort <num_workers> <N> <ip_addr> <rank>" << endl;
         exit(1);
     }
+    long N;
+    int rank, num_workers;
     srand(time(NULL));
-    int num_workers = atoi(argv[1]);
-    long N = atol(argv[2]);
+    num_workers = atoi(argv[1]);
+    N = atol(argv[2]);
     ip_addr = string(argv[3]);
-    int rank = atoi(argv[4]);
+    rank = atoi(argv[4]);
 
     long partition_size = N / num_workers;
     if (rank == num_workers - 1) {
         partition_size += (N % num_workers);
     }
+
+    // Start server to receive data from other workers
+    if(num_workers > 1) setup_server(rank);
 
     vector<int> partition(partition_size);
     generate_random_input(partition, partition_size);
@@ -169,27 +209,42 @@ int main(int argc, char *argv[]) {
     cout << "Random input generated. Starting partition sort" << endl;
     cout << "Partition size = " << partition.size() << endl;
 
-    // Sort the partition
+    // Step 1- sort local data
     sort(partition.begin(), partition.end());
+    cout << "Step 1- Local sort done" << endl;
 
-    cout << "Partition sorted" << endl;
-    // Send the partition to the master- rank 0
-    if(rank != 0){
-        send_partition(partition, partition_size, rank, ip_addr);
-        // client_disconnect_and_clean();
-    } else {
-        // Master rank 0 - allocate memory for the merged array
-        partition.resize(N);
-        // - Receive all the partitions
-        vector<int> partition_sizes = receive_partitions(num_workers, partition, partition_size);
-        // Merge the partitions instead of sorting whole array
-        vector<int> result(N);
-        cout << "Starting merge" << endl;
-        merge(partition, partition_sizes, num_workers, result);
+    // Step 2 - Divide the data into num_workers partitions based on data value
+    vector<int*> partition_starts;
+    vector<int> partition_sizes;
+    partition_data(partition, partition_starts, partition_sizes, num_workers);
+    assert(verify_partitioning(partition_sizes, partition_size));
+    cout << "Step 2- Partitioning done" << endl;
 
-        assert(verify_sorted(result));
-        // disconnect_and_cleanup();
-    }
+    // Step 3.1 - Send data to other workers
+    // lambda function 
+    thread send_thread = thread([&]() {
+        send_partition(partition_starts, partition_sizes, rank, num_workers, ip_addr);
+    });
+
+    // Step 3.2 - Receive data from other workers
+    uint64_t new_size = 2 * N/num_workers;
+    // change partition to only contain local data:
+    vector<int> local_partition = vector<int>(partition_starts[rank], partition_starts[rank] + partition_sizes[rank]);
+    uint64_t local_size = local_partition.size();
+    // print_partition(local_partition);
+    cout << "Local partition size: " << local_size << endl;
+    local_partition.resize(new_size);
+    vector<int> partition_sizes_recv = receive_partitions(num_workers, local_partition, local_size);
+
+    send_thread.join();
+
+    // Step 4- merge all partitions
+    uint64_t local_size_recv = local_partition.size();
+    vector<int> result(local_size_recv);
+    merge(local_partition, partition_sizes_recv, num_workers, result);
+    assert(verify_sorted(result));
+
+    sleep(5);
 
     cout << "Exiting process " << rank << endl;
 }
