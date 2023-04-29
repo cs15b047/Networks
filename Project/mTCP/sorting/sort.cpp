@@ -10,107 +10,18 @@
 
 using namespace std;
 
-
-struct partition_info {
-    size_t partition_size;
-    vector<int> partition;
-};
-
-struct partition_info partition_info_global;
-int num_workers;
-size_t recv_ptr;
-vector<int> partition_sizes;
-
-
-void print_partition(vector<int>& partition) {
-    for(size_t i = 0; i < partition.size(); i++)
-        cout << i << " -> " << partition[i] << endl;
-}
-
-
-static inline int 
-ClientWrite(thread_context_t ctx, int sockid) {
-    struct mtcp_epoll_event ev;
-	int wr;
-	int len = sizeof(int);
-
-    // Send partition size first, then the partition
-	wr = mtcp_write(ctx->mctx, sockid, (char*) &(partition_info_global.partition_size), len);
-	if (wr < len) {
-		TRACE_ERROR("Socket %d: Sending HTTP request failed. "
-				"try: %d, sent: %d\n", sockid, len, wr);
-	}
-    printf("Sent %d bytes\n", wr);
-    len = partition_info_global.partition_size * sizeof(int);
-
-	wr = mtcp_write(ctx->mctx, sockid, (char*) (partition_info_global.partition.data()),len);
-	if (wr < len) {
-		TRACE_ERROR("Socket %d: Sending HTTP request failed. "
-				"try: %d, sent: %d\n", sockid, len, wr);
-	}
-    printf("Sent %d bytes\n", wr);
-	
-	ev.events = MTCP_EPOLLIN;
-	ev.data.sockid = sockid;
-	mtcp_epoll_ctl(ctx->mctx, ctx->ep, MTCP_EPOLL_CTL_MOD, sockid, &ev);
-
-	return 0;
-}
-
-static inline int
-ClientRead(thread_context_t ctx, int sockid) {
-    return 0;
-}
-
-static int 
-ServerRead(struct thread_context *ctx, int sockid)
-{
-	struct mtcp_epoll_event ev;
-	int rd, len, sent;
-
-	rd = mtcp_read(ctx->mctx, sockid, (char *) &(partition_info_global.partition_size), sizeof(int));
-	if (rd <= 0) {
-		return rd;
-	}
-
-    partition_sizes.push_back(partition_info_global.partition_size);
-	printf("Received %d bytes\n", rd);
-	printf("Received Array Length: %ld\n", partition_info_global.partition_size);
-
-	long bytes_to_recv = partition_info_global.partition_size * sizeof(int);
-	while (bytes_to_recv > 0) {
-		rd = mtcp_read(ctx->mctx, sockid, (char *) ((partition_info_global.partition.data()) + recv_ptr), bytes_to_recv);
-		if (rd <= 0) {
-			return rd;
-		}
-
-		bytes_to_recv -= rd;
-		recv_ptr += rd / sizeof(int);
-        printf("Received %d bytes\n", rd);
-	}
-
-    char response[100];
-    strcpy(response, "Received partition");
-	len = strlen(response);
-	
-	sent = mtcp_write(ctx->mctx, sockid, response, len);
-	TRACE_APP("Socket %d: mtcp_write try: %d, ret: %d\n", sockid, len, sent);
-
-	assert(sent == len);
-
-	ev.events = MTCP_EPOLLIN | MTCP_EPOLLOUT;
-	ev.data.sockid = sockid;
-	mtcp_epoll_ctl(ctx->mctx, ctx->ep, MTCP_EPOLL_CTL_MOD, sockid, &ev);
-
-    print_partition(partition_info_global.partition);
-	return rd;
-}
+size_t num_workers;
+long N;
+vector<int> own_partition;
+vector<vector<int>> all_partitions;
+static std::mutex mtx;
+bool sorting_started = false;
 
 void generate_random_input(vector<int>& partition, int partition_size) {
     // Generate random input
     srand(time(NULL));
     for (int i = 0; i < partition_size; i++) {
-        partition[i] = rand() % INT_MAX;
+        partition[i] = rand() % 100;
     }
 }
 
@@ -122,80 +33,6 @@ struct sockaddr_in get_server_info(){
     return serv_addr;
 }
 
-void send_partition() {
-    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    struct sockaddr_in serv_addr = get_server_info();
-    connect(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
-    // Send size first, then the partition
-    cout << "Sending partition of size " << partition_info_global.partition_size << " to rank 0" << endl;
-    send(sockfd, (const void *) &(partition_info_global.partition_size), sizeof(int), 0);
-    int sent_bytes = send(sockfd, (const void *)(partition_info_global.partition.data()), (size_t)(partition_info_global.partition_size * sizeof(int)), 0);
-    
-    cout << "Sent " << sent_bytes/sizeof(int) << " elements" << endl;
-}
-
-void receive_partitions() {
-    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    struct sockaddr_in serv_addr = get_server_info();
-    if(bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
-        exit(1);
-    }
-    listen(sockfd, 10);
-
-    for(int i = 1; i < num_workers; i++) {
-        int addr_size = sizeof(serv_addr);
-        int newsockfd = accept(sockfd, (struct sockaddr *) &serv_addr, (socklen_t *)&addr_size);
-        int partition_size = 0;
-        int recvd_bytes1 = recv(newsockfd, (void *) &partition_size, sizeof(int), 0);
-        long bytes_to_recv = partition_size * sizeof(int);
-        cout << "Receiving " << bytes_to_recv << " bytes" << endl;
-        while (bytes_to_recv > 0) {
-            long recvd_bytes = recv(newsockfd, (void *) ((partition_info_global.partition.data()) + recv_ptr), (size_t)(bytes_to_recv), MSG_WAITALL);
-            bytes_to_recv -= recvd_bytes;
-            cout << "Received " << recvd_bytes/sizeof(int) << " elements" << endl;
-            recv_ptr += recvd_bytes/sizeof(int);
-        }
-        assert(recvd_bytes1 == sizeof(int));
-        partition_sizes[i] = partition_size;
-        cout << "Received partition of size " << partition_size << endl;
-        cout << "Recv_ptr = " << recv_ptr << endl;
-    }
-    cout << "Merged array size = " << partition_info_global.partition.size() << endl;
-    assert(recv_ptr == partition_info_global.partition.size());
-}
-
-void merge(vector<int>& merged_arr, vector<int>& partition_sizes, int num_workers, vector<int>& result) {
-    int N = merged_arr.size();
-    vector<int> partition_ptrs(num_workers);
-    vector<int> cum_partition_sizes(num_workers);
-    cum_partition_sizes[0] = partition_sizes[0];
-    for(int i = 1; i < num_workers; i++) {
-        cum_partition_sizes[i] = cum_partition_sizes[i - 1] + partition_sizes[i];
-    }
-    assert(cum_partition_sizes[num_workers - 1] == N);
-
-    // assign pointers to the start of each partition
-    partition_ptrs[0] = 0;
-    for(int i = 1; i < num_workers; i++) {
-        partition_ptrs[i] = cum_partition_sizes[i - 1];
-    }
-
-    // Perform a k-way merge (k = num_workers) using extra space
-    for(int i = 0; i < N; i++) {
-        int min_val = INT_MAX;
-        int min_idx = -1;
-        // get the minimum value from each partition
-        for(int j = 0; j < num_workers; j++) {
-            int ptr = partition_ptrs[j];
-            if(ptr < cum_partition_sizes[j] && merged_arr[ptr] <= min_val) {
-                min_val = merged_arr[ptr];
-                min_idx = j;
-            }
-        }
-        result[i] = min_val;
-        partition_ptrs[min_idx]++;
-    }
-}
 
 bool verify_sorted(vector<int>& arr) {
     int sz = arr.size();
@@ -208,6 +45,182 @@ bool verify_sorted(vector<int>& arr) {
     return true;
 }
 
+void print_partition(vector<int>& partition) {
+    for(size_t i = 0; i < partition.size(); i++) {
+        cout << partition[i] << " ";
+    }
+    cout << endl;
+}
+
+
+void print_partitions(vector<vector<int>>& partitions) {
+    for(size_t i = 0; i < partitions.size(); i++) {
+        cout << "Partition " << i << ": " << endl;
+        print_partition(partitions[i]);
+    }
+}
+
+
+vector<int> merge_partitions_2(vector<vector<int>>& all_partitions) {
+    size_t k = all_partitions.size();
+    vector<size_t> indices(k, 0);
+    size_t total_elements = 0;
+    for (size_t i = 0; i < k; i++) {
+        total_elements += all_partitions[i].size();
+    }
+    
+    vector<int> result(total_elements);
+    size_t min_index;
+    int min_value;
+    for (size_t i = 0; i < total_elements; i++) {
+        min_index = -1;
+        min_value = INT_MAX;
+        for (size_t j = 0; j < k; j++) {
+            if (indices[j] < all_partitions[j].size() && all_partitions[j][indices[j]] < min_value) {
+                min_index = j;
+                min_value = all_partitions[j][indices[j]];
+            }
+        }
+        result[i] = min_value;
+        indices[min_index]++;
+    }
+    return result;
+}
+
+vector<int> merge_partitions(vector<vector<int>>& all_partitions) {
+    // vector<int> output_vec = accumulate(all_partitions.begin(), all_partitions.end(), vector<int>());
+    // sort(output_vec.begin(), output_vec.end());
+    // return output_vec;
+
+    vector<int> output_vec;
+    for (const auto& vec : all_partitions) {
+        copy(vec.begin(), vec.end(), back_inserter(output_vec));
+    }
+    sort(output_vec.begin(), output_vec.end());
+    return output_vec;
+
+}
+
+
+static inline int 
+ClientWrite(thread_context_t ctx, int sockid) {
+    struct mtcp_epoll_event ev;
+	int wr;
+	int len = sizeof(int);
+    size_t partition_size = own_partition.size();
+
+    // Send partition size first, then the partition
+	wr = mtcp_write(ctx->mctx, sockid, (char*) &partition_size, len);
+	if (wr < len) {
+		TRACE_ERROR("Socket %d: Sending HTTP request failed. "
+				"try: %d, sent: %d\n", sockid, len, wr);
+	}
+    printf("Sent %d bytes\n", wr);
+
+
+    len = own_partition.size() * sizeof(int);
+    long bytes_to_send = len;
+    long send_ptr = 0;
+    while (bytes_to_send > 0) {
+        do {
+           wr = mtcp_write(ctx->mctx, sockid, (char*) (own_partition.data() + send_ptr), bytes_to_send);
+        } while (wr < 0 && errno == EAGAIN);
+        
+        if (wr < len) {
+            TRACE_ERROR("Socket %d: Sending HTTP request failed. "
+                    "try: %d, sent: %d\n", sockid, len, wr);
+        }
+        bytes_to_send -= wr;
+        send_ptr += wr / sizeof(int);
+        
+    }
+
+    printf("Sent %ld bytes\n", len - bytes_to_send);
+	
+	ev.events = MTCP_EPOLLIN;
+	ev.data.sockid = sockid;
+	mtcp_epoll_ctl(ctx->mctx, ctx->ep, MTCP_EPOLL_CTL_MOD, sockid, &ev);
+
+    CloseClientConnection(ctx, sockid);
+    ClientStop();
+	return 0;
+}
+
+static inline int
+ClientRead(thread_context_t ctx, int sockid) {
+    return 0;
+}
+
+static void SendResponse(thread_context_t ctx, int sockid, char *response) {
+	struct mtcp_epoll_event ev;
+
+	size_t len = strlen(response);
+	
+	mtcp_write(ctx->mctx, sockid, response, len);
+	TRACE_APP("Socket %d: mtcp_write try: %d, ret: %d\n", sockid, len, sent);
+
+	ev.events = MTCP_EPOLLIN | MTCP_EPOLLOUT;
+	ev.data.sockid = sockid;
+	mtcp_epoll_ctl(ctx->mctx, ctx->ep, MTCP_EPOLL_CTL_MOD, sockid, &ev);
+}
+
+static int 
+ServerRead(struct thread_context *ctx, int sockid)
+{
+	int rd;
+    size_t partition_size;
+    int len = sizeof(int);
+
+	rd = mtcp_read(ctx->mctx, sockid, (char *) &(partition_size), len);
+	if (rd <= 0) {
+		return rd;
+	}
+
+    int curr_index = all_partitions.size();
+    all_partitions.push_back(vector<int>(partition_size));
+
+    printf("Current Core: %d\n", ctx->core);
+	printf("Received %d bytes\n", rd);
+
+    len = partition_size * sizeof(int);
+	long bytes_to_recv = len;
+    long recv_ptr = 0;
+	while (bytes_to_recv > 0) {
+        do {
+		    rd = mtcp_read(ctx->mctx, sockid, (char *) ((all_partitions[curr_index].data()) + recv_ptr), bytes_to_recv);
+        } while (rd < 0 && errno == EAGAIN);
+
+        if (rd <= 0) {
+            printf("Error: %d, errno: %d\n", rd, errno);
+            return rd;
+        }
+	
+		bytes_to_recv -= rd;
+		recv_ptr += rd / sizeof(int);
+	}
+
+    printf("Received %ld bytes\n", len - bytes_to_recv);
+   
+    if(all_partitions.size() == num_workers) {
+        mtx.lock();
+        if (!sorting_started) {
+            sorting_started = true;
+            cout << "All partitions received. Merging..." << endl;
+            vector<int> result = merge_partitions(all_partitions);
+            assert(verify_sorted(result));
+            cout << "Merge successful" << endl;
+        }
+        mtx.unlock();
+        CloseServerConnection(ctx, sockid);
+        ServerStop();
+    }
+
+    char resp[] = "OK";
+    SendResponse(ctx, sockid, resp);
+	return rd;
+}
+
+
 
 int main(int argc, char *argv[]) {
 
@@ -217,23 +230,24 @@ int main(int argc, char *argv[]) {
     }
     srand(time(NULL));
     num_workers = atoi(argv[1]);
-    long N = atol(argv[2]);
-    int rank = atoi(argv[3]);
+    N = atol(argv[2]);
+    size_t rank = atoi(argv[3]);
 	char *conf_file = const_cast<char*>("./conf/sort.conf");
 
-    partition_info_global.partition_size = N / num_workers;
-    if (rank == num_workers - 1) {
-        partition_info_global.partition_size += (N % num_workers);
+    size_t partition_size = N / num_workers;
+    if (rank + 1 == num_workers) {
+        partition_size += (N % num_workers);
     }
 
-    partition_info_global.partition.resize(partition_info_global.partition_size);
-    generate_random_input(partition_info_global.partition, partition_info_global.partition_size);
+    own_partition.resize(partition_size);
+    generate_random_input(own_partition, partition_size);
+
 
     cout << "Random input generated. Starting partition sort" << endl;
-    cout << "Partition size = " << partition_info_global.partition.size() << endl;
+    cout << "Partition size = " << own_partition.size() << endl;
 
     // Sort the partition
-    sort(partition_info_global.partition.begin(), partition_info_global.partition.end());
+    sort(own_partition.begin(), own_partition.end());
 
     cout << "Partition sorted" << endl;
     // Send the partition to the master- rank 0
@@ -252,22 +266,13 @@ int main(int argc, char *argv[]) {
             TRACE_CONFIG("Failed to setup mtcp\n");
             exit(EXIT_FAILURE);
         }
-
-        recv_ptr = partition_info_global.partition_size;
-        partition_sizes.push_back(partition_info_global.partition_size);
-        partition_info_global.partition.resize(N);
-
+        all_partitions.push_back(own_partition);
         ServerStart();
         ServerStop();
 
         // // - Receive all the partitions
         // receive_partitions();
-        // // Merge the partitions instead of sorting whole array
-        // vector<int> result(N);
-        // cout << "Starting merge" << endl;
-        // merge(partition_info_global.partition, partition_sizes, num_workers, result);
-
-        // assert(verify_sorted(result));
+        
     }
 
     cout << "Exiting process " << rank << endl;

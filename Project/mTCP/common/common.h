@@ -16,6 +16,7 @@
 #include <sys/queue.h>
 #include <assert.h>
 #include <limits.h>
+#include <csignal>
 
 #include <mtcp_api.h>
 #include <mtcp_epoll.h>
@@ -184,7 +185,7 @@ CreateConnection(thread_context_t ctx)
 }
 /*----------------------------------------------------------------------------*/
 static inline void 
-CloseConnection(thread_context_t ctx, int sockid)
+CloseClientConnection(thread_context_t ctx, int sockid)
 {
 	mtcp_epoll_ctl(ctx->mctx, ctx->ep, MTCP_EPOLL_CTL_DEL, sockid, NULL);
 	mtcp_close(ctx->mctx, sockid);
@@ -207,14 +208,11 @@ SignalHandler(int signum)
 
 	for (i = 0; i < core_limit; i++) {
 		if (app_thread[i] == pthread_self()) {
-			//TRACE_INFO("Server thread %d got SIGINT\n", i);
-			done[i] = TRUE;
-		} else {
-			if (!done[i]) {
 				pthread_kill(app_thread[i], signum);
-			}
 		}
 	}
+
+	exit(EXIT_SUCCESS);
 }
 
 
@@ -314,7 +312,7 @@ RunClientLoop(void *arg)
 				TRACE_APP("[CPU %d] Error on socket %d\n", 
 						core, events[i].data.sockid);
 				ctx->errors++;
-				CloseConnection(ctx, events[i].data.sockid);
+				CloseClientConnection(ctx, events[i].data.sockid);
 
 			} else if (events[i].events & MTCP_EPOLLIN) {
 				ClientRead(ctx, events[i].data.sockid);
@@ -471,6 +469,7 @@ void ClientStart() {
 
 void ClientStop(){
 	mtcp_destroy();
+	std::raise(SIGKILL);
 }
 
 #ifndef _LARGEFILE64_SOURCE
@@ -547,7 +546,12 @@ static int finished;
 static int 
 ServerRead(struct thread_context *ctx, int sockid);
 
-
+void 
+CloseServerConnection(struct thread_context *ctx, int sockid)
+{
+	mtcp_epoll_ctl(ctx->mctx, ctx->ep, MTCP_EPOLL_CTL_DEL, sockid, NULL);
+	mtcp_close(ctx->mctx, sockid);
+}
 
 /*----------------------------------------------------------------------------*/
 int 
@@ -616,7 +620,7 @@ InitializeServerThread(int core)
 		TRACE_ERROR("Failed to create epoll descriptor!\n");
 		return NULL;
 	}
-
+	ctx->core = core;
 	return ctx;
 }
 /*----------------------------------------------------------------------------*/
@@ -732,18 +736,18 @@ RunServerLoop(void *arg)
 				} else {
 					perror("mtcp_getsockopt");
 				}
-				CloseConnection(ctx, events[i].data.sockid);
+				CloseServerConnection(ctx, events[i].data.sockid);
 
 			} else if (events[i].events & MTCP_EPOLLIN) {
 				ret = ServerRead(ctx, events[i].data.sockid);
 
 				if (ret == 0) {
 					/* connection closed by remote host */
-					CloseConnection(ctx, events[i].data.sockid);
+					CloseServerConnection(ctx, events[i].data.sockid);
 				} else if (ret < 0) {
 					/* if not EAGAIN, it's an error */
 					if (errno != EAGAIN) {
-						CloseConnection(ctx, events[i].data.sockid);
+						CloseServerConnection(ctx, events[i].data.sockid);
 					}
 				}
 
@@ -860,4 +864,5 @@ void ServerStart() {
 
 void ServerStop() {
 	mtcp_destroy();
+	std::raise(SIGKILL);
 }
