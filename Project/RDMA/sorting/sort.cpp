@@ -43,7 +43,6 @@ void setup_client(int dst_rank, struct Connection* conn_state) {
 
 void send_partition(vector<int*>& partition_starts, vector<int> partition_sizes, int rank, int num_workers) {
     cout << "Step 3: Sending partition pieces to all workers" << endl;
-    conn_state.resize(num_workers, NULL);
     for(int i = 0; i < num_workers; i++) {
         conn_state[i] = new Connection();
     }
@@ -92,23 +91,32 @@ vector<int> receive_partitions(int num_workers, vector<int>& merged_arr, uint64_
 }
 
 void setup_server_connection(int num_workers) {
+    cout << "Step 2: Setting up server connections" << endl;
     clients.resize(num_workers, NULL);
     for(int i = 1; i < num_workers; i++) {
         clients[i] = new Client();
         struct Client* client = clients[i];
         int ret = setup_client_resources(client);
+        cout << "Client setup: " << ret << endl;
     }
     for(int i = 1; i < num_workers; i++) {
         int ret = accept_client_connection(clients[i]);
+        cout << "Accepted client connection " << i << endl;
     }
+    cout << "Accepted all client connections" << endl;
 }
 
 void setup_client_connection(int num_workers, int rank) {
+    cout << "Step 2: Setting up client connections" << endl;
+    conn_state.resize(num_workers, NULL);
     for(int dst_rank = 0; dst_rank < num_workers; dst_rank++){
         if(dst_rank == rank) continue;
+        cout << "Setting up client connection to server " << dst_rank << endl;
         setup_client(dst_rank, conn_state[dst_rank]);
         int ret = client_connect_to_server(conn_state[dst_rank]);
+        cout << "Connected to server " << dst_rank << endl;
     }
+    cout << "Connected to all servers" << endl;
 }
 
 long get_time(chrono::high_resolution_clock::time_point start, chrono::high_resolution_clock::time_point end) {
