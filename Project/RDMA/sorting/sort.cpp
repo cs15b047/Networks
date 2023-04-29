@@ -26,6 +26,7 @@ struct sockaddr_in generate_server_info(int rank){
     return serv_addr;
 }
 
+// rank runs on ip_addr[rank % ip_addr.size()] server
 struct sockaddr_in get_server_info(int rank){
     struct sockaddr_in serv_addr;
     serv_addr.sin_family = AF_INET;
@@ -272,6 +273,7 @@ int main(int argc, char *argv[]) {
     auto merge_start = chrono::high_resolution_clock::now();
     merge(local_partition, partition_sizes_recv, num_workers, result);
     auto merge_end = chrono::high_resolution_clock::now();
+    cout << "Step 4- Merge done" << endl;
     assert(verify_sorted(result));
     auto verify_sorted_end = chrono::high_resolution_clock::now();
 

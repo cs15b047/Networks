@@ -2,11 +2,15 @@ make clean && make
 
 workers=$1
 N=$2
-rank_start=$3
-rank_end=$4
-ip="10.10.1.3,10.10.1.2"
+num_servers=$3
+ip=$4
+server_id=$5
 # Alternate between the two IPs
-for ((i=$rank_start; i<=$rank_end; i++))
+for ((i=0; i<$workers; i++))
 do
-    ./sort $workers $N $ip $i &
+    # Run if the server ID is the same as the rank % num_servers
+    if [ $((i % num_servers)) -eq $server_id ]
+    then
+        ./sort $workers $N $ip $i &
+    fi
 done
