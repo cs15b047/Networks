@@ -11,7 +11,7 @@
 using namespace std;
 
 vector<string> ip_addr;
-vector<struct Connection*> conn_state;
+vector<Connection*> conn_state;
 vector<Client*> clients;
 
 struct sockaddr_in generate_server_info(int rank){
