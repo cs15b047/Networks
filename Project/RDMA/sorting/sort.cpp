@@ -6,17 +6,13 @@
 
 #include "rdma_utils.h"
 #include "rdma_client_utils.h"
+#include "sort_utils.h"
 
 using namespace std;
 
 vector<string> ip_addr;
-
-void generate_random_input(vector<int>& partition, int partition_size) {
-    // Generate random input
-    generate(partition.begin(), partition.begin() + partition_size, []() {
-        return rand() % INT_MAX;
-    });
-}
+vector<struct Connection*> conn_state;
+vector<Client*> clients;
 
 struct sockaddr_in generate_server_info(int rank){
     struct sockaddr_in serv_addr;
@@ -36,10 +32,7 @@ struct sockaddr_in get_server_info(int rank){
     return serv_addr;
 }
 
-void print_partition(vector<int>& partition) {
-    for(int i = 0; i < partition.size(); i++)
-        cout << i << " -> " << partition[i] << endl;
-}
+
 
 void setup_client(int dst_rank, struct Connection* conn_state) {
     struct sockaddr_in serv_addr = get_server_info(dst_rank);
@@ -50,17 +43,15 @@ void setup_client(int dst_rank, struct Connection* conn_state) {
 
 void send_partition(vector<int*>& partition_starts, vector<int> partition_sizes, int rank, int num_workers) {
     cout << "Step 3: Sending partition pieces to all workers" << endl;
-    vector<struct Connection*> conn_state(num_workers, NULL);
+    conn_state.resize(num_workers, NULL);
     for(int i = 0; i < num_workers; i++) {
         conn_state[i] = new Connection();
     }
     for(int dst_rank = 0; dst_rank < num_workers; dst_rank++) {
         if(dst_rank == rank) continue;
         // cout << "Sending partition to rank " << dst_rank << endl;
-        setup_client(dst_rank, conn_state[dst_rank]);
-        int ret = client_connect_to_server(conn_state[dst_rank]);
         // cout << ret << endl;
-        ret = client_xchange_metadata_with_server((char *)partition_starts[dst_rank], (size_t)(partition_sizes[dst_rank] * sizeof(int)), conn_state[dst_rank]);
+        int ret = client_xchange_metadata_with_server((char *)partition_starts[dst_rank], (size_t)(partition_sizes[dst_rank] * sizeof(int)), conn_state[dst_rank]);
         // cout << ret << endl;
         ret = client_remote_memory_ops(conn_state[dst_rank]);
         // cout << ret << endl;
@@ -79,18 +70,6 @@ void setup_server(int rank) {
 vector<int> receive_partitions(int num_workers, vector<int>& merged_arr, uint64_t recv_ptr) {
     vector<int> partition_sizes(num_workers);
     partition_sizes[0] = recv_ptr;
-
-    vector<Client*> clients(num_workers, NULL);
-
-    for(int i = 1; i < num_workers; i++) {
-        clients[i] = new Client();
-        struct Client* client = clients[i];
-        int ret = setup_client_resources(client);
-    }
-
-    for(int i = 1; i < num_workers; i++) {
-        int ret = accept_client_connection(clients[i]);
-    }
 
     cout << "Accepted all client connections, start receiving partitions" << endl;
     for(int i = 1; i < num_workers; i++) {
@@ -112,80 +91,23 @@ vector<int> receive_partitions(int num_workers, vector<int>& merged_arr, uint64_
     return partition_sizes;
 }
 
-void merge(vector<int>& merged_arr, vector<int>& partition_sizes, int num_workers, vector<int>& result) {
-    long N = merged_arr.size();
-    vector<long> partition_ptrs(num_workers);
-    vector<long> cum_partition_sizes(num_workers);
-    cum_partition_sizes[0] = partition_sizes[0];
+void setup_server_connection(int num_workers) {
+    clients.resize(num_workers, NULL);
     for(int i = 1; i < num_workers; i++) {
-        cum_partition_sizes[i] = cum_partition_sizes[i - 1] + partition_sizes[i];
+        clients[i] = new Client();
+        struct Client* client = clients[i];
+        int ret = setup_client_resources(client);
     }
-    assert(cum_partition_sizes[num_workers - 1] == N);
-
-    // assign pointers to the start of each partition
-    partition_ptrs[0] = 0;
     for(int i = 1; i < num_workers; i++) {
-        partition_ptrs[i] = cum_partition_sizes[i - 1];
-    }
-
-    // Perform a k-way merge (k = num_workers) using extra space
-    for(long i = 0; i < N; i++) {
-        int min_val = INT_MAX;
-        int min_idx = -1;
-        // get the minimum value from each partition
-        for(int j = 0; j < num_workers; j++) {
-            long ptr = partition_ptrs[j];
-            if(ptr < cum_partition_sizes[j] && merged_arr[ptr] <= min_val) {
-                min_val = merged_arr[ptr];
-                min_idx = j;
-            }
-        }
-        result[i] = min_val;
-        partition_ptrs[min_idx]++;
+        int ret = accept_client_connection(clients[i]);
     }
 }
 
-bool verify_sorted(vector<int>& arr) {
-    int sz = arr.size();
-    for(int i = 1; i < sz; i++) {
-        if(arr[i - 1] > arr[i]) {
-            cout << "Erring element: idx: " << i << " --> " << arr[i - 1] << " " << arr[i] << endl;
-            return false;
-        }
-    }
-    return true;
-}
-
-bool verify_partitioning(vector<int>& partition_sizes, long N) {
-    long sum = 0;
-    int num_workers = partition_sizes.size();
-    cout << "Num workers: " <<  num_workers << endl;
-    for(int i = 0; i < num_workers; i++) {
-        sum += (long)partition_sizes[i];
-    }
-    // cout << "Sum of sizes: " << sum << ", Expected size: " << N << endl;
-    return sum == N;
-}
-
-void partition_data(vector<int>& data, vector<int*>& partition_starts, vector<int>& partition_sizes, int num_workers) {
-    partition_starts.resize(num_workers, NULL);
-    partition_sizes.resize(num_workers, 0);
-
-    int range_span = INT_MAX / num_workers;
-
-    // range for worker i: [i * range_span, (i + 1) * range_span)
-    // for worker num_workers - 1: [i * range_span, INT_MAX]
-    int itr = 0;
-    for(int i = 0; i < num_workers; i++) {
-        int lower = i * range_span;
-        int upper = (i == num_workers - 1) ? INT_MAX : (i + 1) * range_span;
-        partition_starts[i] = &(data.data()[itr]);
-        if(i == num_workers - 1) {
-            partition_sizes[i] = (int)data.size() - itr;
-        } else {
-            partition_sizes[i] = upper_bound(data.begin() + itr, data.end(), upper) - (data.begin() + itr);
-        }
-        itr += partition_sizes[i];
+void setup_client_connection(int num_workers, int rank) {
+    for(int dst_rank = 0; dst_rank < num_workers; dst_rank++){
+        if(dst_rank == rank) continue;
+        setup_client(dst_rank, conn_state[dst_rank]);
+        int ret = client_connect_to_server(conn_state[dst_rank]);
     }
 }
 
@@ -236,7 +158,12 @@ int main(int argc, char *argv[]) {
     cout << "Random input generated. Starting partition sort" << endl;
     cout << "Partition size = " << partition.size() << endl;
 
-
+    thread server_conn_thread = thread([&](){
+        if(num_workers > 1) setup_server_connection(num_workers);
+    });
+    thread client_conn_thread = thread([&](){
+        if(num_workers > 1) setup_client_connection(num_workers, rank);
+    });
 
     // Step 1- sort local data
     auto sort_start = chrono::high_resolution_clock::now();
@@ -253,6 +180,10 @@ int main(int argc, char *argv[]) {
     assert(verify_partitioning(partition_sizes, partition_size));
     auto verify_partitioning_end = chrono::high_resolution_clock::now();
     cout << "Step 2- Partitioning done" << endl;
+
+    server_conn_thread.join();
+    client_conn_thread.join();
+    cout << "Step 3a- Connection setup done" << endl;
 
     // Step 3.1 - Send data to other workers
     auto shuffle_start = chrono::high_resolution_clock::now();
