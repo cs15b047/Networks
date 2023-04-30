@@ -22,6 +22,9 @@
 #define NUM_MBUFS 8191
 #define MBUF_CACHE_SIZE 250
 #define BURST_SIZE 32
+#define FLOW_NUM 5
+#define TCP_WINDOW_LEN 20
+
 uint64_t NUM_PACKETS = 100;
 
 /* Define the mempool globally */
@@ -29,8 +32,7 @@ struct rte_mempool *mbuf_pool = NULL;
 static struct rte_ether_addr my_eth;
 static size_t message_size = 1000;
 uint64_t FLOW_SIZE = 10000;
-int FLOW_NUM = 1;
-int TCP_WINDOW_LEN = 10;
+
 
 int packet_len = 1000;
 int ack_len = 10;
