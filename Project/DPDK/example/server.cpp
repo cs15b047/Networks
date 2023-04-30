@@ -2,7 +2,7 @@
  * Copyright(c) 2010-2015 Intel Corporation
  */
 
-#include "../Utils/utils.h"
+#include "utils.h"
 
 /* Basic forwarding application lcore. 8< */
 static void
@@ -95,7 +95,7 @@ lcore_main(void)
 				ack = rte_pktmbuf_alloc(mbuf_pool);
 				if (ack == NULL) {
 					printf("Error allocating tx mbuf\n");
-					return -EINVAL;
+					return;
 				}
 				size_t header_size = 0;
 				uint8_t *ptr = rte_pktmbuf_mtod(ack, uint8_t *);
@@ -152,13 +152,9 @@ lcore_main(void)
 }
 /* >8 End Basic forwarding application lcore. */
 
-/*
- * The main function, which does initialization and calls the per-lcore
- * functions.
- */
-int main(int argc, char *argv[])
-{
-	// struct rte_mempool *mbuf_pool;
+
+void setup_server(int argc, char *argv[]) {
+		// struct rte_mempool *mbuf_pool;
 	unsigned nb_ports = 1;
 	uint16_t portid;
 	
@@ -190,7 +186,15 @@ int main(int argc, char *argv[])
 
 	if (rte_lcore_count() > 1)
 		printf("\nWARNING: Too many lcores enabled. Only 1 used.\n");
+}
+/*
+ * The main function, which does initialization and calls the per-lcore
+ * functions.
+ */
+int main(int argc, char *argv[])
+{
 
+	setup_server(argc, argv);
 	/* Call lcore_main on the main core only. Called on single lcore. 8< */
 	lcore_main();
 	/* >8 End of called on single lcore. */
