@@ -22,7 +22,7 @@
 #define NUM_MBUFS 8191
 #define MBUF_CACHE_SIZE 250
 #define BURST_SIZE 32
-#define FLOW_NUM 5
+#define FLOW_NUM 1
 #define TCP_WINDOW_LEN 20
 
 uint64_t NUM_PACKETS = 100;
@@ -84,7 +84,7 @@ wrapsum(uint32_t sum)
 
 static int parse_packet(struct sockaddr_in *src,
                         struct sockaddr_in *dst,
-                        void **payload,
+                        int **payload,
                         size_t *payload_len,
                         struct rte_mbuf *pkt)
 {
@@ -159,7 +159,7 @@ static int parse_packet(struct sockaddr_in *src,
     dst->sin_family = AF_INET;
     
     *payload_len = pkt->pkt_len - header;
-    *payload = (void *)p;
+    *payload = (int *)p;
     return ret;
 
 }
@@ -304,9 +304,9 @@ static void set_tcp_response_hdrs(struct rte_tcp_hdr *tcp_hdr, struct rte_ipv4_h
 
 ////////////////////////////// PAYLOAD //////////////////////////////
 
-static void set_payload(uint8_t *ptr, struct rte_mbuf *pkt, size_t pkt_len, size_t header_size) {
+static void set_payload(uint8_t *ptr, struct rte_mbuf *pkt, size_t pkt_len, size_t header_size, int* data) {
      /* set the payload */
-    memset(ptr, 'a', pkt_len);
+    memcpy(ptr, data, pkt_len);
 
     pkt->l2_len = RTE_ETHER_HDR_LEN;
     pkt->l3_len = sizeof(struct rte_ipv4_hdr);

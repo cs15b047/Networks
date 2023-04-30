@@ -3,6 +3,16 @@
  */
 
 #include "utils.h"
+#include "bits/stdc++.h"
+
+using namespace std;
+
+static void print_vector(int *data, size_t len) {
+	for (int i = 0; i < len; i++) {
+		printf("%d ", data[i]);
+	}
+	printf("\n");
+}
 
 /* Basic forwarding application lcore. 8< */
 static void
@@ -53,6 +63,8 @@ lcore_main(void)
 			struct rte_ether_hdr *eth_h_ack;
 			struct rte_ipv4_hdr *ip_h_ack;
 			struct rte_tcp_hdr *tcp_h_ack;
+			char ack_msg[] = "ACK";
+			int *data = (int *)malloc(sizeof(int) * packet_len);
 
 			// Receive packets in a burst from the RX queue of the port
 			const uint16_t nb_rx = rte_eth_rx_burst(port, 0, bufs, BURST_SIZE);
@@ -65,15 +77,15 @@ lcore_main(void)
 			{
 				pkt = bufs[i];
 				struct sockaddr_in src, dst;
-                void *payload = NULL;
                 size_t payload_length = 0;
-                int tcp_port_id = parse_packet(&src, &dst, &payload, &payload_length, pkt);
+                int tcp_port_id = parse_packet(&src, &dst, &data, &payload_length, pkt);
 				if(tcp_port_id == 0){
 					printf("Ignoring Bad MAC packet\n");
 					rte_pktmbuf_free(pkt);
 					continue;
 				}
-
+				// print_vector(data, payload_length/sizeof(int));
+				// printf("Received array of size %ld\n", payload_length/sizeof(int));
 				eth_h = rte_pktmbuf_mtod(pkt, struct rte_ether_hdr *);
 				if (eth_h->ether_type != rte_be_to_cpu_16(RTE_ETHER_TYPE_IPV4))
 				{
@@ -119,7 +131,7 @@ lcore_main(void)
 				header_size += sizeof(*tcp_h_ack);
 				ptr += sizeof(*tcp_h_ack);
 
-				set_payload(ptr, ack, ack_len, header_size);
+				set_payload(ptr, ack, ack_len, header_size, (int*)ack_msg);
 
 				int pkts_sent = 0;
 				unsigned char *ack_buffer = rte_pktmbuf_mtod(ack, unsigned char *);

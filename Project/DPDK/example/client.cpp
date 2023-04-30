@@ -3,6 +3,9 @@
  */
 
 #include "utils.h"
+#include "bits/stdc++.h"
+
+using namespace std;
 
 
 #define LATENCY_STATS 0
@@ -23,9 +26,16 @@ sliding_info window[FLOW_NUM];
 timer_info *timer;
 parsed_packet_info *packet_infos;
 struct timer_info overall_time;
+vector<int> data;
 
+void generate_random_data() {
+srand(time(NULL));
+    for (int i = 0; i < data.size(); i++) {
+        data[i] = rand() % 256;
+    }
+}
 
-struct rte_mbuf *create_packet(uint32_t seq_num, size_t port_id) {
+struct rte_mbuf *create_packet(uint32_t seq_num, size_t port_id, int *data) {
     struct rte_ether_hdr *eth_hdr;
     struct rte_ipv4_hdr *ipv4_hdr;
     struct rte_tcp_hdr *tcp_hdr;
@@ -55,17 +65,19 @@ struct rte_mbuf *create_packet(uint32_t seq_num, size_t port_id) {
     ptr += sizeof(*tcp_hdr);
     header_size += sizeof(*tcp_hdr);
 
-    set_payload(ptr, pkt, packet_len, header_size);
+    set_payload(ptr, pkt, packet_len, header_size, data);
 
     return pkt;
 }
 
-void send_packet(size_t port_id) {
+void send_packet(size_t port_id, int *data) {
     // CREATE PACKETS
     int64_t num_packets = 0, starting_seq_num = -1;
+    int *data_ptr = data;
     while( window[port_id].next_seq < NUM_PACKETS && window[port_id].next_seq - window[port_id].last_recv_seq < TCP_WINDOW_LEN) {
         int64_t seq_num = window[port_id].next_seq;
-        pkt = create_packet(seq_num, port_id);
+        pkt = create_packet(seq_num, port_id, data_ptr);
+        data_ptr += packet_len / sizeof(int);
         pkts_send_buffer[num_packets] = pkt;
         
         window[port_id].next_seq++;
@@ -80,7 +92,7 @@ void send_packet(size_t port_id) {
         // SEND PACKETS
         uint64_t start_time = raw_time();
         uint64_t packets_sent = rte_eth_tx_burst(1, 0, pkts_send_buffer, num_packets);
-        // printf("Flow: %u, Sent packets : %u\n", port_id, packets_sent);
+        // printf("Flow: %u, Sent packets : %u\n", port_id, total_packets_sent[port_id]);
         total_packets_sent[port_id] += packets_sent;
         for(int64_t i = 0; i < num_packets; i++) {
             int64_t seq_num = starting_seq_num + i;
@@ -97,7 +109,7 @@ void process_packets(uint16_t num_recvd, struct rte_mbuf **pkts, parsed_packet_i
 
     for (int i = 0; i < num_recvd; i++) {
         struct sockaddr_in src, dst;
-        void *payload = NULL;
+        int *payload = NULL;
         size_t payload_length = 0;
         int f_num = parse_packet(&src, &dst, &payload, &payload_length, pkts[i]);
 
@@ -119,7 +131,6 @@ void receive_packets() {
     uint64_t end_time = raw_time();
 
     if (packets_recvd > 0) {
-        // printf("Flow: %u, Received packets: %u\n", port_id, packets_recvd);
 
         // PROCESS PACKETS
         process_packets(packets_recvd, pkts_recv_buffer, packet_infos);
@@ -132,6 +143,7 @@ void receive_packets() {
                 timer[packet_infos[f].ack_num].end_time = end_time;
             }
         }
+
     }
 }
 
@@ -193,11 +205,11 @@ lcore_main()
     size_t port_id = 0;
 
     init_window();
-
+    printf("Starting main loop\n");
     overall_time.start_time = raw_time();
     while (!all_flows_completed(flow_completed)) {
         if(window[port_id].last_recv_seq < NUM_PACKETS) {
-            send_packet(port_id);
+            send_packet(port_id, data.data());
             // POLL ON RECEIVE PACKETS
             receive_packets();
         } else {
@@ -226,7 +238,11 @@ int main(int argc, char *argv[])
 	uint16_t portid;
 
     if (argc == 2) {
-        FLOW_SIZE =  (uint64_t) rte_str_to_size(argv[1]) * 1024 * 1024 * 1024;
+        size_t array_len =  (size_t) rte_str_to_size(argv[1]);
+        data.resize(array_len);
+        generate_random_data();
+        printf("Generated %lu GB of data\n", array_len);
+        FLOW_SIZE = array_len * sizeof(int);
     } else {
         printf( "usage: ./client <flow size gb>>\n");
         return 1;
