@@ -237,7 +237,7 @@ int ClientSetup(int argc, char *argv[], int64_t data_len) {
     unsigned nb_ports;
     uint16_t portid;
 
-    FLOW_SIZE = data_len;
+    FLOW_SIZE = data_len * sizeof(int64_t);
     // packet_len = (packet_len < FLOW_SIZE) ? packet_len: FLOW_SIZE;
     NUM_PACKETS = 1 + ceil(FLOW_SIZE * 1.0 / packet_len);
 
