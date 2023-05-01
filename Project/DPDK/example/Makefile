@@ -4,6 +4,7 @@ include common.mk
 APP = client
 CLIENT_SRC := client.cpp
 SERVER_SRC := server.cpp
+CFLAGS += -Wall -std=c++11 -O3
 
 all: clean build/client build/server
 
