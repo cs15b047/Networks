@@ -24,7 +24,7 @@
 #define BURST_SIZE 32
 #define FLOW_NUM 1
 #define TCP_WINDOW_LEN 20
-
+#define MIN(a,b) (((a)<(b))?(a):(b))
 uint64_t NUM_PACKETS = 100;
 
 /* Define the mempool globally */
