@@ -120,28 +120,26 @@ int extract_headers(struct rte_mbuf *pkt, struct rte_ether_hdr *&eth_h,
 /* Basic forwarding application lcore. 8< */
 static void ServerStart(void) {
     uint16_t port;
-    struct rte_mbuf *bufs[BURST_SIZE];
-    struct rte_mbuf *pkt;
-    struct rte_ether_hdr *eth_h;
-    struct rte_ipv4_hdr *ip_h;
-    struct rte_tcp_hdr *tcp_h;
-    uint8_t i;
-    int ret;
-    uint8_t nb_replies = 0;
-    struct sockaddr_in src, dst;
-    int tcp_port_id;
-    int64_t *local_data = NULL;
-    size_t payload_length = 0;
-
-    struct rte_mbuf *acks[BURST_SIZE];
-    struct rte_mbuf *ack;
-
+    
     check_numa();
     /* Main work of application loop. 8< */
     for (;;) {
         RTE_ETH_FOREACH_DEV(port) {
             if (port != 1)
                 continue;
+
+            struct rte_mbuf *bufs[BURST_SIZE];
+            struct rte_mbuf *pkt;
+            struct rte_ether_hdr *eth_h;
+            struct rte_ipv4_hdr *ip_h;
+            struct rte_tcp_hdr *tcp_h;
+            uint8_t i;
+            int ret;
+            uint8_t nb_replies = 0;
+
+            struct rte_mbuf *acks[BURST_SIZE];
+            struct rte_mbuf *ack;
+
 
             const uint16_t nb_rx = rte_eth_rx_burst(port, 0, bufs, BURST_SIZE);
             if (unlikely(nb_rx == 0))
@@ -150,6 +148,11 @@ static void ServerStart(void) {
             // Process received packets
             for (i = 0; i < nb_rx; i++) {
                 pkt = bufs[i];
+                  struct sockaddr_in src, dst;
+                int tcp_port_id;
+                int64_t *local_data = NULL;
+                size_t payload_length = 0;
+
                 local_data = NULL;
                 payload_length = 0;
 
