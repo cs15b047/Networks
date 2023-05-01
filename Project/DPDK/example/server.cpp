@@ -7,9 +7,14 @@
 
 using namespace std;
 
-static void print_vector(int *data, size_t len) {
-	for (int i = 0; i < len; i++) {
-		printf("%d ", data[i]);
+vector<int64_t> data;
+int64_t data_len = -1;
+
+static void print_vector(int64_t *data, size_t len) {
+	int n = (len > 10) ? 50 : len;
+	printf("Printing top %d elements of vector: \n", n);
+	for (int i = 0; i < n; i++) {
+		printf("%ld ", data[i]);
 	}
 	printf("\n");
 }
@@ -21,6 +26,9 @@ lcore_main(void)
 	uint16_t port;
 	uint32_t rec = 0;
 	uint16_t nb_rx;
+
+	int64_t bytes_remaining = -1;
+	int64_t total_elements_recvd = 0;
 
 	/*
 	 * Check that the port is on the same NUMA node as the polling thread
@@ -64,7 +72,9 @@ lcore_main(void)
 			struct rte_ipv4_hdr *ip_h_ack;
 			struct rte_tcp_hdr *tcp_h_ack;
 			char ack_msg[] = "ACK";
-			int *data = (int *)malloc(sizeof(int) * packet_len);
+			int64_t *local_data = NULL;
+			size_t payload_length = 0;
+
 
 			// Receive packets in a burst from the RX queue of the port
 			const uint16_t nb_rx = rte_eth_rx_burst(port, 0, bufs, BURST_SIZE);
@@ -77,15 +87,39 @@ lcore_main(void)
 			{
 				pkt = bufs[i];
 				struct sockaddr_in src, dst;
-                size_t payload_length = 0;
-                int tcp_port_id = parse_packet(&src, &dst, &data, &payload_length, pkt);
+				int tcp_port_id;
+				if(data_len == -1) {
+					int64_t *data_len_ptr = NULL;
+					tcp_port_id = parse_packet(&src, &dst, &data_len_ptr, &payload_length, pkt);
+					data_len = *data_len_ptr;
+					printf("Receving array of size %ld\n", data_len);
+					data.resize(data_len);
+					bytes_remaining = data_len * sizeof(data[0]);
+				} else {
+                	tcp_port_id = parse_packet(&src, &dst, &local_data, &payload_length, pkt);
+					int64_t elements_recvd = MIN(payload_length,  bytes_remaining) / sizeof(data[0]);
+					memcpy(data.data() + total_elements_recvd, local_data, elements_recvd * sizeof(data[0]));
+					total_elements_recvd += elements_recvd;
+					
+					printf("Received elements: %ld\n", total_elements_recvd);
+					bytes_remaining -= payload_length;
+
+					if(total_elements_recvd == data_len) {
+						printf("Received all elements\n");
+						print_vector(data.data(), data_len);
+						total_elements_recvd = 0;
+						data_len = -1;
+						bytes_remaining = -1;
+						data.clear();
+					}
+				}
+
+				
 				if(tcp_port_id == 0){
 					printf("Ignoring Bad MAC packet\n");
 					rte_pktmbuf_free(pkt);
 					continue;
 				}
-				// print_vector(data, payload_length/sizeof(int));
-				// printf("Received array of size %ld\n", payload_length/sizeof(int));
 				eth_h = rte_pktmbuf_mtod(pkt, struct rte_ether_hdr *);
 				if (eth_h->ether_type != rte_be_to_cpu_16(RTE_ETHER_TYPE_IPV4))
 				{
@@ -131,7 +165,7 @@ lcore_main(void)
 				header_size += sizeof(*tcp_h_ack);
 				ptr += sizeof(*tcp_h_ack);
 
-				set_payload(ptr, ack, ack_len, header_size, (int*)ack_msg);
+				set_payload(ptr, ack, ack_len, header_size, (int64_t*)ack_msg);
 
 				int pkts_sent = 0;
 				unsigned char *ack_buffer = rte_pktmbuf_mtod(ack, unsigned char *);

@@ -84,7 +84,7 @@ wrapsum(uint32_t sum)
 
 static int parse_packet(struct sockaddr_in *src,
                         struct sockaddr_in *dst,
-                        int **payload,
+                        int64_t **payload,
                         size_t *payload_len,
                         struct rte_mbuf *pkt)
 {
@@ -159,7 +159,7 @@ static int parse_packet(struct sockaddr_in *src,
     dst->sin_family = AF_INET;
     
     *payload_len = pkt->pkt_len - header;
-    *payload = (int *)p;
+    *payload = (int64_t *)p;
     return ret;
 
 }
@@ -304,7 +304,7 @@ static void set_tcp_response_hdrs(struct rte_tcp_hdr *tcp_hdr, struct rte_ipv4_h
 
 ////////////////////////////// PAYLOAD //////////////////////////////
 
-static void set_payload(uint8_t *ptr, struct rte_mbuf *pkt, size_t pkt_len, size_t header_size, int* data) {
+static void set_payload(uint8_t *ptr, struct rte_mbuf *pkt, size_t pkt_len, size_t header_size, int64_t* data) {
      /* set the payload */
     memcpy(ptr, data, pkt_len);
 
