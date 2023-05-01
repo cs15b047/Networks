@@ -4,11 +4,33 @@
 
 #include "utils.h"
 #include "bits/stdc++.h"
-
+#define MAX_CLIENTS 2
 using namespace std;
 
-vector<int64_t> data;
-int64_t data_len = -1;
+std::hash<int64_t> hasher;
+vector<int> client_indices;
+
+struct client_info {
+	int64_t data_len = -1;
+	int64_t bytes_remaining = -1;
+	int64_t total_elements_recvd = 0;
+	vector<int64_t> data;
+};
+
+typedef struct client_info client_info_t;
+
+vector<client_info_t> client_data;
+
+int64_t create_five_tuple_hash(struct rte_ether_hdr *eth_h, struct rte_ipv4_hdr *ip_h, struct rte_tcp_hdr *tcp_h)
+{
+	int64_t hash_data = 0;
+	hash_data = eth_h->src_addr.addr_bytes[0] + eth_h->src_addr.addr_bytes[1] + eth_h->src_addr.addr_bytes[2] + eth_h->src_addr.addr_bytes[3] + eth_h->src_addr.addr_bytes[4] + eth_h->src_addr.addr_bytes[5];
+	hash_data += eth_h->dst_addr.addr_bytes[0] + eth_h->dst_addr.addr_bytes[1] + eth_h->dst_addr.addr_bytes[2] + eth_h->dst_addr.addr_bytes[3] + eth_h->dst_addr.addr_bytes[4] + eth_h->dst_addr.addr_bytes[5];
+	hash_data += ip_h->src_addr + ip_h->dst_addr;
+	hash_data += tcp_h->src_port + tcp_h->dst_port;
+
+	return hasher(hash_data);
+}
 
 static void print_vector(int64_t *data, size_t len) {
 	int n = (len > 10) ? 50 : len;
@@ -26,9 +48,6 @@ lcore_main(void)
 	uint16_t port;
 	uint32_t rec = 0;
 	uint16_t nb_rx;
-
-	int64_t bytes_remaining = -1;
-	int64_t total_elements_recvd = 0;
 
 	/*
 	 * Check that the port is on the same NUMA node as the polling thread
@@ -72,8 +91,7 @@ lcore_main(void)
 			struct rte_ipv4_hdr *ip_h_ack;
 			struct rte_tcp_hdr *tcp_h_ack;
 			char ack_msg[] = "ACK";
-			int64_t *local_data = NULL;
-			size_t payload_length = 0;
+			
 
 
 			// Receive packets in a burst from the RX queue of the port
@@ -88,33 +106,11 @@ lcore_main(void)
 				pkt = bufs[i];
 				struct sockaddr_in src, dst;
 				int tcp_port_id;
-				if(data_len == -1) {
-					int64_t *data_len_ptr = NULL;
-					tcp_port_id = parse_packet(&src, &dst, &data_len_ptr, &payload_length, pkt);
-					data_len = *data_len_ptr;
-					printf("Receving array of size %ld\n", data_len);
-					data.resize(data_len);
-					bytes_remaining = data_len * sizeof(data[0]);
-				} else {
-                	tcp_port_id = parse_packet(&src, &dst, &local_data, &payload_length, pkt);
-					int64_t elements_recvd = MIN(payload_length,  bytes_remaining) / sizeof(data[0]);
-					memcpy(data.data() + total_elements_recvd, local_data, elements_recvd * sizeof(data[0]));
-					total_elements_recvd += elements_recvd;
-					
-					printf("Received elements: %ld\n", total_elements_recvd);
-					bytes_remaining -= payload_length;
+				int64_t *local_data = NULL;
+				size_t payload_length = 0;
 
-					if(total_elements_recvd == data_len) {
-						printf("Received all elements\n");
-						print_vector(data.data(), data_len);
-						total_elements_recvd = 0;
-						data_len = -1;
-						bytes_remaining = -1;
-						data.clear();
-					}
-				}
+				tcp_port_id = parse_packet(&src, &dst, &local_data, &payload_length, pkt);
 
-				
 				if(tcp_port_id == 0){
 					printf("Ignoring Bad MAC packet\n");
 					rte_pktmbuf_free(pkt);
@@ -136,7 +132,43 @@ lcore_main(void)
 											   sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) );
 				// rte_pktmbuf_dump(stdout, pkt, pkt->pkt_len);
 				rec++;
+				
+				int64_t hash_val = create_five_tuple_hash(eth_h, ip_h, tcp_h);
+				// printf("Hash value: %ld\n", hash_val);
+				// check if hash value is in the client_indices else add
+				if(std::find(client_indices.begin(), client_indices.end(), hash_val) == client_indices.end()) {
+					client_info_t new_client_info;
 
+					if(client_indices.size() == MAX_CLIENTS) {
+						client_indices.clear();
+						client_data.clear();
+					} 
+					client_indices.push_back(hash_val);
+					client_data.push_back(new_client_info);
+					printf("New client added with client id: %ld\n", hash_val);
+				} 
+				
+				int client_idx = std::find(client_indices.begin(), client_indices.end(), hash_val) - client_indices.begin();
+				client_info_t *client_info = &client_data[client_idx];
+				if(client_info->data_len == -1) {
+					client_info->data_len = local_data[0];
+					client_info->data.resize(client_info->data_len);
+					client_info->bytes_remaining = local_data[0] * sizeof(client_info->data[0]);
+				} else {
+					int64_t *data_ptr = client_info->data.data();
+					int64_t elements_recvd = MIN(payload_length,  client_info->bytes_remaining) / sizeof(client_info->data[0]);
+					memcpy(data_ptr + client_info->total_elements_recvd, local_data, elements_recvd * sizeof(client_info->data[0]));
+					client_info->total_elements_recvd += elements_recvd;
+					client_info->bytes_remaining -= payload_length;
+					// printf("Received %ld elements for client %d\n", client_info->total_elements_recvd, client_idx);
+					if(client_info->total_elements_recvd == client_info->data_len) {
+						printf("Received all elements for client %d\n", client_idx);
+						print_vector(data_ptr, client_info->data_len);
+						client_info->total_elements_recvd = 0;
+						client_info->data_len = -1;
+						client_info->bytes_remaining = -1;
+					}
+				}
 
 				ack = rte_pktmbuf_alloc(mbuf_pool);
 				if (ack == NULL) {
@@ -171,6 +203,7 @@ lcore_main(void)
 				unsigned char *ack_buffer = rte_pktmbuf_mtod(ack, unsigned char *);
 				acks[nb_replies++] = ack;
 
+				
 				////////////////////////// End of Ack construction ///////////////////////////
 				
 				rte_pktmbuf_free(bufs[i]);

@@ -37,7 +37,7 @@ srand(time(NULL));
     }
 }
 
-struct rte_mbuf *create_packet(uint32_t seq_num, size_t port_id, int64_t *data) {
+struct rte_mbuf *create_packet(uint32_t seq_num, size_t port_id, int64_t *data, size_t pkt_len) {
     struct rte_ether_hdr *eth_hdr;
     struct rte_ipv4_hdr *ipv4_hdr;
     struct rte_tcp_hdr *tcp_hdr;
@@ -57,7 +57,7 @@ struct rte_mbuf *create_packet(uint32_t seq_num, size_t port_id, int64_t *data) 
 
     /* add in ipv4 header*/
     ipv4_hdr = (struct rte_ipv4_hdr *)ptr;
-    set_ipv4_hdrs(ipv4_hdr, rte_cpu_to_be_32(0), rte_cpu_to_be_32(0), packet_len);
+    set_ipv4_hdrs(ipv4_hdr, rte_cpu_to_be_32(0), rte_cpu_to_be_32(0), pkt_len);
     ptr += sizeof(*ipv4_hdr);
     header_size += sizeof(*ipv4_hdr);
 
@@ -67,7 +67,7 @@ struct rte_mbuf *create_packet(uint32_t seq_num, size_t port_id, int64_t *data) 
     ptr += sizeof(*tcp_hdr);
     header_size += sizeof(*tcp_hdr);
 
-    set_payload(ptr, pkt, packet_len, header_size, data);
+    set_payload(ptr, pkt, pkt_len, header_size, data);
 
     return pkt;
 }
@@ -77,10 +77,11 @@ void send_packet(size_t port_id, int64_t *data, size_t data_len) {
     int64_t num_packets = 0, starting_seq_num = -1;
     int64_t *data_ptr = data;
     size_t bytes_sent = 0;
+
     while(bytes_sent < data_len && window[port_id].next_seq < NUM_PACKETS && window[port_id].next_seq - window[port_id].last_recv_seq < TCP_WINDOW_LEN) {
         int64_t seq_num = window[port_id].next_seq;
-        pkt = create_packet(seq_num, port_id, data_ptr);
-        data_ptr += packet_len / sizeof(int);
+        pkt = create_packet(seq_num, port_id, data_ptr, packet_len);
+        data_ptr += packet_len / sizeof(data_ptr[0]);
         bytes_sent += packet_len;
         pkts_send_buffer[num_packets] = pkt;
         
