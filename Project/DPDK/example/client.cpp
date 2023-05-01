@@ -31,7 +31,7 @@ int64_t data_len;
 
 void generate_random_data() {
     srand(time(NULL));
-    for (int i = 0; i < data.size(); i++) {
+    for (int64_t i = 0; i < data_len; i++) {
         data[i] = rand() % 256;
     }
 }
@@ -212,8 +212,8 @@ void print_stats() {
     }
 }
 
-/* >8 End Basic forwarding application lcore. */
-static void lcore_main() {
+static void send_partition(vector<int64_t> &partition) {
+    int64_t partition_len = partition.size();
     timer = (timer_info *)malloc(NUM_PACKETS * sizeof(timer_info));
     packet_infos = (parsed_packet_info *)malloc(TCP_WINDOW_LEN *
                                                 sizeof(parsed_packet_info));
@@ -224,8 +224,8 @@ static void lcore_main() {
     overall_time.start_time = raw_time();
     while (!all_flows_completed(flow_completed)) {
         if (window[port_id].last_recv_seq < NUM_PACKETS) {
-            send_packet(port_id, &data_len, sizeof(data_len));
-            send_packet(port_id, data.data(), sizeof(data[0]) * data.size());
+            send_packet(port_id, &partition_len, sizeof(partition_len));
+            send_packet(port_id, partition.data(), sizeof(partition[0]) * partition_len);
             // POLL ON RECEIVE PACKETS
             receive_packets();
         } else {
@@ -236,12 +236,17 @@ static void lcore_main() {
     }
     overall_time.end_time = raw_time();
 
-    print_stats();
     free(packet_infos);
     free(timer);
 }
 
-int client_setup(int argc, char *argv[]) {
+/* >8 End Basic forwarding application lcore. */
+static void ClientStart() {
+    send_partition(data);
+    print_stats();
+}
+
+int ClientSetup(int argc, char *argv[]) {
     setbuf(stdout, NULL);
     unsigned nb_ports;
     uint16_t portid;
@@ -290,22 +295,22 @@ int client_setup(int argc, char *argv[]) {
     return 0;
 }
 
+void ClientStop() {
+    printf("Done!\n");
+    rte_eal_cleanup();
+}
+
 /*
  * The main function, which does initialization and calls the per-lcore
  * functions.
  */
-
 int main(int argc, char *argv[]) {
-    int ret = client_setup(argc, argv);
+    int ret = ClientSetup(argc, argv);
     if (ret < 0) {
+        printf("Error setting up server\n");
         return ret;
     }
-    /* Call lcore_main on the main core only. Called on single lcore. 8< */
-    lcore_main();
-    /* >8 End of called on single lcore. */
-    printf("Done!\n");
-    /* clean up the EAL */
-    rte_eal_cleanup();
-
+    ClientStart();
+    ClientStop();
     return 0;
 }

@@ -169,7 +169,7 @@ int extract_headers(struct rte_mbuf *pkt, struct rte_ether_hdr *&eth_h,
 }
 
 /* Basic forwarding application lcore. 8< */
-static void lcore_main(void) {
+static void ServerStart(void) {
     uint16_t port;
     struct rte_mbuf *bufs[BURST_SIZE];
     struct rte_mbuf *pkt;
@@ -238,7 +238,7 @@ static void lcore_main(void) {
     }
 }
 
-void setup_server(int argc, char *argv[]) {
+int ServerSetup(int argc, char *argv[]) {
     // struct rte_mempool *mbuf_pool;
     unsigned nb_ports = 1;
     uint16_t portid;
@@ -271,20 +271,27 @@ void setup_server(int argc, char *argv[]) {
 
     if (rte_lcore_count() > 1)
         printf("\nWARNING: Too many lcores enabled. Only 1 used.\n");
+
+	return 0;
 }
+
+void ServerStop() {
+    rte_eal_cleanup();
+}
+
 /*
  * The main function, which does initialization and calls the per-lcore
  * functions.
  */
 int main(int argc, char *argv[]) {
 
-    setup_server(argc, argv);
-    /* Call lcore_main on the main core only. Called on single lcore. 8< */
-    lcore_main();
-    /* >8 End of called on single lcore. */
-
-    /* clean up the EAL */
-    rte_eal_cleanup();
+    int ret = ServerSetup(argc, argv);
+	if (ret < 0) {
+		printf("Error setting up server\n");
+		return ret;
+	}
+    ServerStart();
+	ServerStop();
 
     return 0;
 }
