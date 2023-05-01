@@ -16,6 +16,8 @@
 #include <rte_common.h>
 
 #include <time.h>
+#include <bits/stdc++.h>
+
 #define RX_RING_SIZE 1024
 #define TX_RING_SIZE 1024
 
@@ -25,6 +27,10 @@
 #define FLOW_NUM 1
 #define TCP_WINDOW_LEN 20
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
+
+using namespace std;
+
+
 uint64_t NUM_PACKETS = 100;
 
 /* Define the mempool globally */
@@ -77,7 +83,7 @@ static int parse_packet(struct sockaddr_in *src, struct sockaddr_in *dst,
     // ether_hdr
     // ipv4_hdr
     // udp_hdr --> tcp_hdr
-    // client timestamp
+    // worker timestamp
     uint8_t *p = rte_pktmbuf_mtod(pkt, uint8_t *);
     size_t header = 0;
 
@@ -324,5 +330,41 @@ typedef struct timer_info {
     uint64_t start_time;
     uint64_t end_time;
 } timer_info;
+
+void generate_random_data(vector<int64_t> &data) {
+    srand(time(NULL));
+    for (size_t i = 0; i < data.size(); i++) {
+        data[i] = rand() % 256;
+    }
+}
+
+bool verify_sorted(vector<int64_t> &data) {
+    for (size_t i = 0; i < data.size() - 1; i++) {
+        if (data[i] > data[i + 1]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void write_array_to_file(vector<int64_t> &data, string filename) {
+    ofstream outfile;
+    outfile.open(filename);
+    outfile << "Size: " << data.size() << endl;
+    for (size_t i = 0; i < data.size(); i++) {
+        outfile << data[i] << endl;
+    }
+    outfile.close();
+}
+
+// static void print_vector(int64_t *data, size_t len) {
+//     int n = (len > 10) ? 50 : len;
+//     printf("Printing top %d elements of vector: \n", n);
+//     for (int i = 0; i < n; i++) {
+//         printf("%ld ", data[i]);
+//     }
+//     printf("\n");
+// }
+
 
 #endif /* UTILS_H */

@@ -1,7 +1,6 @@
-#include "client.h"
-#include "server.h"
-
-
+#include "include/master.h"
+#include "include/worker.h"
+#define TOTAL_PARTITIONS 3
 
 struct partition_info {
     int64_t data_len = -1;
@@ -16,25 +15,17 @@ vector<int> partition_indices;
 vector<partition_info_t> all_partition_data;
 partition_info_t own_partition_data;
 
-void generate_random_data(vector<int64_t> &data) {
-    srand(time(NULL));
-    for (size_t i = 0; i < data.size(); i++) {
-        data[i] = rand() % 256;
-    }
-}
-
 bool all_partitions_received() {
-    for (size_t i = 0; i < all_partition_data.size(); i++) {
+    if (all_partition_data.size() < TOTAL_PARTITIONS) {
+        return false;
+    }
+
+    for (size_t i = 0; i < TOTAL_PARTITIONS; i++) {
         if (!all_partition_data[i].received) {
             return false;
         }
     }
     return true;
-}
-
-static void ClientStart() {
-    send_partition(own_partition_data.data);
-    print_stats();
 }
 
 void process_data(struct rte_ether_hdr *eth_h,
@@ -47,13 +38,13 @@ void process_data(struct rte_ether_hdr *eth_h,
         partition_indices.end()) {
         partition_info_t empty_partition_info;
 
-        if (partition_indices.size() == MAX_CLIENTS) {
+        if (partition_indices.size() == TOTAL_PARTITIONS) {
             partition_indices.clear();
             all_partition_data.clear();
         }
         partition_indices.push_back(partition_id);
         all_partition_data.push_back(empty_partition_info);
-        printf("New client added with client id: %ld\n", partition_id);
+        printf("New worker added with worker id: %ld\n", partition_id);
     }
 
     int partition_idx =
@@ -76,8 +67,6 @@ void process_data(struct rte_ether_hdr *eth_h,
         partition_info->bytes_remaining -= payload_length;
 
         if (partition_info->total_elements_recvd == partition_info->data_len) {
-            printf("Received all elements for client %d\n", partition_idx);
-            print_vector(data_ptr, partition_info->data_len);
             partition_info->received = true;
             partition_info->total_elements_recvd = 0;
             partition_info->data_len = -1;
@@ -89,37 +78,49 @@ void process_data(struct rte_ether_hdr *eth_h,
     if(all_partitions_received()) {
         printf("All partitions received\n");
         vector<int64_t> all_data;
-        for (size_t i = 0; i < all_partition_data.size(); i++) {
+        for (size_t i = 0; i < TOTAL_PARTITIONS; i++) {
             all_data.insert(all_data.end(), all_partition_data[i].data.begin(),
                             all_partition_data[i].data.end());
         }
         sort(all_data.begin(), all_data.end());
-        print_vector(all_data.data(), all_data.size());
+        if (verify_sorted(all_data)) {
+            printf("Data is sorted\n");
+        } else {
+            printf("Data is not sorted\n");
+        }
+        MasterStop();
     }
 }
 
 
-int HeadNode(int argc, char *argv[]) {
-    int ret = ServerSetup(argc, argv);
+int MasterNode(int argc, char *argv[]) {
+    int ret = MasterSetup(argc, argv);
 	if (ret < 0) {
-		printf("Error setting up server\n");
+		printf("Error setting up master\n");
 		return ret;
 	}
-    ServerStart();
-	ServerStop();
+    MasterStart();
+	MasterStop();
 
     return 0;
 }
 
 
+
+static void WorkerStart() {
+    send_partition(own_partition_data.data);
+    print_stats();
+}
+
+
 int WorkerNode(int argc, char *argv[]) {
-    int ret = ClientSetup(argc, argv, own_partition_data.data_len);
+    int ret = WorkerSetup(argc, argv, own_partition_data.data_len);
     if (ret < 0) {
-        printf("Error setting up server\n");
+        printf("Error setting up master\n");
         return ret;
     }
-    ClientStart();
-    ClientStop();
+    WorkerStart();
+    WorkerStop();
     return 0;
 }
 
@@ -143,7 +144,7 @@ int main(int argc, char *argv[]) {
     if (rank == 0) {
         partition_indices.push_back(rank);
         all_partition_data.push_back(own_partition_data);
-        return HeadNode(argc, argv);
+        return MasterNode(argc, argv);
     } else {
         return WorkerNode(argc, argv);
     }

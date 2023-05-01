@@ -274,6 +274,7 @@ int ClientSetup(int argc, char *argv[], int64_t data_len) {
 
 
 void ClientStop() {
-    printf("Done!\n");
     rte_eal_cleanup();
+    printf("Exiting..\n");
+    exit(0);
 }

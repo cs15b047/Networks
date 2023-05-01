@@ -4,7 +4,6 @@
 
 #include "bits/stdc++.h"
 #include "utils.h"
-#define MAX_CLIENTS 2
 using namespace std;
 
 std::hash<int64_t> hasher;
@@ -31,16 +30,6 @@ int64_t create_five_tuple_hash(struct rte_ether_hdr *eth_h,
 
     return hasher(hash_data);
 }
-
-static void print_vector(int64_t *data, size_t len) {
-    int n = (len > 10) ? 50 : len;
-    printf("Printing top %d elements of vector: \n", n);
-    for (int i = 0; i < n; i++) {
-        printf("%ld ", data[i]);
-    }
-    printf("\n");
-}
-
 
 
 struct rte_mbuf *create_ack(struct rte_ether_hdr *eth_h,
@@ -118,7 +107,7 @@ int extract_headers(struct rte_mbuf *pkt, struct rte_ether_hdr *&eth_h,
 }
 
 /* Basic forwarding application lcore. 8< */
-static void ServerStart(void) {
+static void MasterStart(void) {
     uint16_t port;
     
     check_numa();
@@ -189,7 +178,7 @@ static void ServerStart(void) {
     }
 }
 
-int ServerSetup(int argc, char *argv[]) {
+int MasterSetup(int argc, char *argv[]) {
     // struct rte_mempool *mbuf_pool;
     unsigned nb_ports = 1;
     uint16_t portid;
@@ -227,6 +216,10 @@ int ServerSetup(int argc, char *argv[]) {
 	return 0;
 }
 
-void ServerStop() {
+void MasterStop() {
     rte_eal_cleanup();
+    // wait for all lcores to finish
+    printf("Exiting..\n");
+    rte_delay_ms(1000);
+    exit(0);
 }
