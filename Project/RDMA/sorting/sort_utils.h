@@ -4,7 +4,7 @@
 #include <bits/stdc++.h>
 using namespace std;
 
-#define RECORD_SIZE 1000
+#define RECORD_SIZE 100
 
 struct Record{
     int key;
