@@ -4,19 +4,35 @@
 #include <bits/stdc++.h>
 using namespace std;
 
-void generate_random_input(vector<int>& partition, int partition_size) {
+#define RECORD_SIZE 100
+
+struct Record{
+    int key;
+    char value[RECORD_SIZE - sizeof(int)];
+
+    bool operator<(const Record& other) const {
+        return key < other.key;
+    }
+    bool operator>(const Record& other) const {
+        return key > other.key;
+    }
+};
+
+void generate_random_input(vector<Record>& partition, int partition_size) {
     // Generate random input
     generate(partition.begin(), partition.begin() + partition_size, []() {
-        return rand() % INT_MAX;
+        struct Record r;
+        r.key = rand() % INT_MAX;
+        return r;
     });
 }
 
-void print_partition(vector<int>& partition) {
+void print_partition(vector<Record>& partition) {
     for(int i = 0; i < partition.size(); i++)
-        cout << i << " -> " << partition[i] << endl;
+        cout << i << " -> " << partition[i].key << endl;
 }
 
-void merge(vector<int>& merged_arr, vector<int>& partition_sizes, int num_workers, vector<int>& result) {
+void merge(vector<Record>& merged_arr, vector<int>& partition_sizes, int num_workers, vector<Record>& result) {
     long N = merged_arr.size();
     vector<long> partition_ptrs(num_workers);
     vector<long> cum_partition_sizes(num_workers);
@@ -39,21 +55,21 @@ void merge(vector<int>& merged_arr, vector<int>& partition_sizes, int num_worker
         // get the minimum value from each partition
         for(int j = 0; j < num_workers; j++) {
             long ptr = partition_ptrs[j];
-            if(ptr < cum_partition_sizes[j] && merged_arr[ptr] <= min_val) {
-                min_val = merged_arr[ptr];
+            if(ptr < cum_partition_sizes[j] && merged_arr[ptr].key <= min_val) {
+                min_val = merged_arr[ptr].key;
                 min_idx = j;
             }
         }
-        result[i] = min_val;
+        result[i] = merged_arr[partition_ptrs[min_idx]];
         partition_ptrs[min_idx]++;
     }
 }
 
-bool verify_sorted(vector<int>& arr) {
+bool verify_sorted(vector<Record>& arr) {
     int sz = arr.size();
     for(int i = 1; i < sz; i++) {
         if(arr[i - 1] > arr[i]) {
-            cout << "Erring element: idx: " << i << " --> " << arr[i - 1] << " " << arr[i] << endl;
+            cout << "Erring element: idx: " << i << " --> " << arr[i - 1].key << " " << arr[i].key << endl;
             return false;
         }
     }
@@ -71,7 +87,7 @@ bool verify_partitioning(vector<int>& partition_sizes, long N) {
     return sum == N;
 }
 
-void partition_data(vector<int>& data, vector<int*>& partition_starts, vector<int>& partition_sizes, int num_workers) {
+void partition_data(vector<Record>& data, vector<Record*>& partition_starts, vector<int>& partition_sizes, int num_workers) {
     partition_starts.resize(num_workers, NULL);
     partition_sizes.resize(num_workers, 0);
 
@@ -87,7 +103,8 @@ void partition_data(vector<int>& data, vector<int*>& partition_starts, vector<in
         if(i == num_workers - 1) {
             partition_sizes[i] = (int)data.size() - itr;
         } else {
-            partition_sizes[i] = upper_bound(data.begin() + itr, data.end(), upper) - (data.begin() + itr);
+            const Record upper_ele = Record{upper, ""};
+            partition_sizes[i] = upper_bound(data.begin() + itr, data.end(), upper_ele) - (data.begin() + itr);
         }
         itr += partition_sizes[i];
     }
