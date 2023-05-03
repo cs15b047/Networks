@@ -1,4 +1,4 @@
-# make clean && make all
+make clean && make all
 
 workers=$1
 N=$2
