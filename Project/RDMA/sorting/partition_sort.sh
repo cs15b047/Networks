@@ -1,4 +1,4 @@
-make clean && make all
+# make clean && make all
 
 workers=$1
 N=$2
@@ -7,11 +7,11 @@ ip=$4
 type=$5
 server_id=$6
 
-if $type -eq "rdma"
+prog="kernel_sort"
+if [ $type = "rdma" ]
 then
     prog="rdma_sort"
-else
-    prog="kernel_sort"
+    echo "Running RDMA sort"
 fi
 
 # Alternate between the two IPs
