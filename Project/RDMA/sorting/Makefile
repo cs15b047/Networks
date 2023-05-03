@@ -1,7 +1,10 @@
-sort: sort.cpp
-	g++ -o sort sort.cpp rdma_common.c -Ofast -lrdmacm -libverbs -lpthread
+rdma_sort: sort.cpp
+	g++ -o rdma_sort sort.cpp rdma_common.c -Ofast -lrdmacm -libverbs -lpthread
 
-all: sort
+kernel_sort: kernel_sort.cpp
+	g++ -o kernel_sort kernel_sort.cpp -g -lpthread
+
+all: rdma_sort kernel_sort
 
 clean:
-	rm -f sort
+	rm -f rdma_sort kernel_sort
