@@ -32,6 +32,8 @@ using namespace std;
 
 
 uint64_t NUM_PACKETS = 100;
+std::hash<int64_t> hasher;
+
 
 /* Define the mempool globally */
 struct rte_mempool *mbuf_pool = NULL;
@@ -367,6 +369,39 @@ void write_array_to_file(vector<int64_t> &data, string filename) {
     }
     outfile.close();
 }
+
+int extract_headers(struct rte_mbuf *pkt, struct rte_ether_hdr *&eth_h,
+                    struct rte_ipv4_hdr *&ip_h, struct rte_tcp_hdr *&tcp_h) {
+    eth_h = rte_pktmbuf_mtod(pkt, struct rte_ether_hdr *);
+    if (eth_h->ether_type != rte_be_to_cpu_16(RTE_ETHER_TYPE_IPV4)) {
+        return -1;
+    }
+
+    ip_h = rte_pktmbuf_mtod_offset(pkt, struct rte_ipv4_hdr *,
+                                   sizeof(struct rte_ether_hdr));
+
+    tcp_h = rte_pktmbuf_mtod_offset(pkt, struct rte_tcp_hdr *,
+                                    sizeof(struct rte_ether_hdr) +
+                                        sizeof(struct rte_ipv4_hdr));
+    return 0;
+}
+
+int64_t create_five_tuple_hash(struct rte_ether_hdr *eth_h,
+                               struct rte_ipv4_hdr *ip_h,
+                               struct rte_tcp_hdr *tcp_h) {
+    int64_t hash_data = 0;
+    hash_data = eth_h->src_addr.addr_bytes[0] + eth_h->src_addr.addr_bytes[1] +
+                eth_h->src_addr.addr_bytes[2] + eth_h->src_addr.addr_bytes[3] +
+                eth_h->src_addr.addr_bytes[4] + eth_h->src_addr.addr_bytes[5];
+    hash_data += eth_h->dst_addr.addr_bytes[0] + eth_h->dst_addr.addr_bytes[1] +
+                 eth_h->dst_addr.addr_bytes[2] + eth_h->dst_addr.addr_bytes[3] +
+                 eth_h->dst_addr.addr_bytes[4] + eth_h->dst_addr.addr_bytes[5];
+    hash_data += ip_h->src_addr + ip_h->dst_addr;
+    hash_data += tcp_h->src_port + tcp_h->dst_port;
+
+    return hasher(hash_data);
+}
+
 
 // static void print_vector(int64_t *data, size_t len) {
 //     int n = (len > 10) ? 50 : len;

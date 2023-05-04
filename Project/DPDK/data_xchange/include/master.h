@@ -15,21 +15,6 @@ void process_data(struct rte_ether_hdr *eth_h,
                     int64_t *local_data,
                     int payload_length);
 
-int64_t create_five_tuple_hash(struct rte_ether_hdr *eth_h,
-                               struct rte_ipv4_hdr *ip_h,
-                               struct rte_tcp_hdr *tcp_h) {
-    int64_t hash_data = 0;
-    hash_data = eth_h->src_addr.addr_bytes[0] + eth_h->src_addr.addr_bytes[1] +
-                eth_h->src_addr.addr_bytes[2] + eth_h->src_addr.addr_bytes[3] +
-                eth_h->src_addr.addr_bytes[4] + eth_h->src_addr.addr_bytes[5];
-    hash_data += eth_h->dst_addr.addr_bytes[0] + eth_h->dst_addr.addr_bytes[1] +
-                 eth_h->dst_addr.addr_bytes[2] + eth_h->dst_addr.addr_bytes[3] +
-                 eth_h->dst_addr.addr_bytes[4] + eth_h->dst_addr.addr_bytes[5];
-    hash_data += ip_h->src_addr + ip_h->dst_addr;
-    hash_data += tcp_h->src_port + tcp_h->dst_port;
-
-    return hasher(hash_data);
-}
 
 
 struct rte_mbuf *create_ack(struct rte_ether_hdr *eth_h,
@@ -90,21 +75,7 @@ void check_numa() {
     printf("\nCore %u forwarding packets. [Ctrl+C to quit]\n", rte_lcore_id());
 }
 
-int extract_headers(struct rte_mbuf *pkt, struct rte_ether_hdr *&eth_h,
-                    struct rte_ipv4_hdr *&ip_h, struct rte_tcp_hdr *&tcp_h) {
-    eth_h = rte_pktmbuf_mtod(pkt, struct rte_ether_hdr *);
-    if (eth_h->ether_type != rte_be_to_cpu_16(RTE_ETHER_TYPE_IPV4)) {
-        return -1;
-    }
 
-    ip_h = rte_pktmbuf_mtod_offset(pkt, struct rte_ipv4_hdr *,
-                                   sizeof(struct rte_ether_hdr));
-
-    tcp_h = rte_pktmbuf_mtod_offset(pkt, struct rte_tcp_hdr *,
-                                    sizeof(struct rte_ether_hdr) +
-                                        sizeof(struct rte_ipv4_hdr));
-    return 0;
-}
 
 /* Basic forwarding application lcore. 8< */
 static void MasterStart(void) {

@@ -29,6 +29,14 @@ parsed_packet_info *packet_infos;
 struct timer_info overall_time;
 size_t recvd_bytes = 0;
 
+void process_data(struct rte_ether_hdr *eth_h,
+                    struct rte_ipv4_hdr *ip_h,
+                    struct rte_tcp_hdr *tcp_h,
+                    int64_t *local_data,
+                    int payload_length);
+
+
+
 struct rte_mbuf *create_packet(uint32_t seq_num, size_t port_id, int64_t *data,
                                size_t pkt_len, struct rte_ether_addr *dst_mac) {
     struct rte_ether_hdr *eth_hdr;
@@ -111,14 +119,31 @@ void process_packets(uint16_t num_recvd, struct rte_mbuf **pkts,
     printf("Received burst of %u\n", (unsigned)num_recvd);
     struct rte_tcp_hdr *tcp_h;
 
+  struct rte_ether_hdr *eth_h;
+            struct rte_ipv4_hdr *ip_h;
+            int ret = 0;
     for (int i = 0; i < num_recvd; i++) {
         struct sockaddr_in src, dst;
         int64_t *payload = NULL;
         size_t payload_length = 0;
-        int f_num =
+        int tcp_port_id =
             parse_packet(&src, &dst, &payload, &payload_length, pkts[i]);
         printf("Received packet of size %lu\n", payload_length);
         recvd_bytes += payload_length;
+
+         if (tcp_port_id == 0) {
+                printf("Ignoring Bad MAC packet\n");
+                rte_pktmbuf_free(pkt);
+                continue;
+            }
+
+            ret = extract_headers(pkt, eth_h, ip_h, tcp_h);
+            if (ret < 0) {
+                rte_pktmbuf_free(pkt);
+                continue;
+            }
+
+            process_data(eth_h, ip_h, tcp_h, payload, payload_length);
 
         // tcp_h = rte_pktmbuf_mtod_offset(pkts[i], struct rte_tcp_hdr *,
         //                                 sizeof(struct rte_ether_hdr) +
@@ -213,12 +238,13 @@ void print_stats() {
 
 static void send_partition(vector<int64_t> &partition, struct rte_ether_addr *dst_mac, int worker_rank) {
     int64_t partition_len = partition.size();
+    vector<int64_t> partition_id_info = {worker_rank, partition_len};
     size_t port_id = 1;
 
     init_window();
     printf("Starting main loop\n");
     overall_time.start_time = raw_time();
-    send_packet(port_id, &partition_len, sizeof(partition_len), dst_mac);
+    send_packet(port_id, partition_id_info.data(), sizeof(partition_id_info[0]) * partition_id_info.size(), dst_mac);
     send_packet(port_id, partition.data(), sizeof(partition[0]) * partition_len, dst_mac);
       
     overall_time.end_time = raw_time();
