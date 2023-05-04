@@ -210,7 +210,7 @@ void print_stats() {
 
 static void send_partition(vector<int64_t> &partition, struct rte_ether_addr *dst_mac, int worker_rank) {
     int64_t partition_len = partition.size();
-    size_t port_id = 0;
+    size_t port_id = 1;
 
     init_window();
     printf("Starting main loop\n");
@@ -251,7 +251,7 @@ int WorkerSetup(int argc, char *argv[]) {
 
     /* Initializing all ports. 8< */
     RTE_ETH_FOREACH_DEV(portid)
-    if (port_init(portid, mbuf_pool) != 0)
+    if (portid == 1 && port_init(portid, mbuf_pool) != 0)
         rte_exit(EXIT_FAILURE, "Cannot init port %" PRIu16 "\n", portid);
     /* >8 End of initializing all ports. */
 
