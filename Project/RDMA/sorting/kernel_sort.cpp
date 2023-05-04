@@ -75,6 +75,12 @@ void send_partition(vector<Record*>& partition_starts, vector<int> partition_siz
         // // Send size first, then the partition
         // cout << "Sent " << ret << " bytes to rank " << dst_rank << endl;
     }
+    // clean up client connections
+    for(int i = 0; i < num_workers; i++) {
+        if(i == rank) continue;
+        close(conn_state[i]->sockfd);
+    }
+
     cout << "All partitions sent" << endl;
 }
 
@@ -132,6 +138,12 @@ vector<int> receive_partitions(int num_workers, vector<Record>& merged_arr, uint
     cout << "Recv ptr: " << recv_ptr << ", Merged array size = " << merged_arr.size() << endl;
     assert (recv_ptr <= merged_arr.size());
     merged_arr.resize(recv_ptr);
+
+    // clean up client connections
+    for(int i = 0; i < num_workers; i++) {
+        if(i == rank) continue;
+        close(clients[i]->sockfd);
+    }
 
     return partition_sizes;
 }
@@ -272,7 +284,7 @@ int main(int argc, char *argv[]) {
     });
     cout << "Step 3- Receive data from other workers" << endl;
     // Step 3.2 - Receive data from other workers
-    uint64_t new_size = 2 * N/num_workers;
+    uint64_t new_size = (uint64_t) (1.1 * (double) N/num_workers);
     // change partition to only contain local data:
     vector<Record> local_partition = vector<Record>(partition_starts[rank], partition_starts[rank] + partition_sizes[rank]);
     uint64_t local_size = local_partition.size();
@@ -283,6 +295,9 @@ int main(int argc, char *argv[]) {
 
     send_thread.join();
     auto shuffle_end = chrono::high_resolution_clock::now();
+
+    partition.clear();
+    partition.shrink_to_fit();
 
     // Step 4- merge all partitions
     uint64_t local_size_recv = local_partition.size();

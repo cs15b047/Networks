@@ -384,7 +384,7 @@ static int cleanup(struct Client* client) {
 		// we continue anyways;
 	}
 	/* Destroy memory buffers */
-	rdma_buffer_free(client->server_buffer_mr);
+	rdma_buffer_deregister(client->server_buffer_mr);
 	rdma_buffer_deregister(client->server_metadata_mr);	
 	rdma_buffer_deregister(client->client_metadata_mr);	
 	/* Destroy protection domain */

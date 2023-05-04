@@ -55,6 +55,12 @@ void send_partition(vector<Record*>& partition_starts, vector<int> partition_siz
         cout << "Sending partition of size " << partition_sizes[dst_rank] << " to rank " << dst_rank << endl;
     }
     cout << "All partitions sent" << endl;
+
+    // Cleanup
+    for(int i = 0; i < num_workers; i++) {
+        if(i == rank) continue;
+        int ret = client_disconnect_and_clean(conn_state[i]);
+    }
 }
 
 void setup_server(int rank) {
@@ -83,6 +89,17 @@ vector<int> receive_partitions(int num_workers, vector<Record>& merged_arr, uint
     cout << "Recv ptr: " << recv_ptr << ", Merged array size = " << merged_arr.size() << endl;
     assert (recv_ptr <= merged_arr.size());
     merged_arr.resize(recv_ptr);
+
+    // Disconnect and clean up RDMA server
+    for(int i = 1; i < num_workers; i++) {
+        int ret = disconnect(); // wait for client event to disconnect
+        cout << "Disconnect: rc = " << ret << endl;
+    }
+    for(int i = 1; i < num_workers; i++) {
+        int ret = cleanup(clients[i]);
+        cout << "Cleanup: rc = " << ret << endl;
+    }
+    shutdown();
 
     return partition_sizes;
 }
@@ -204,7 +221,7 @@ int main(int argc, char *argv[]) {
     });
 
     // Step 3.2 - Receive data from other workers
-    uint64_t new_size = 2 * N/num_workers;
+    uint64_t new_size = (uint64_t) (1.1 * (double) N/num_workers);
     // change partition to only contain local data:
     vector<Record> local_partition = vector<Record>(partition_starts[rank], partition_starts[rank] + partition_sizes[rank]);
     uint64_t local_size = local_partition.size();
@@ -217,6 +234,9 @@ int main(int argc, char *argv[]) {
 
     send_thread.join();
     auto shuffle_end = chrono::high_resolution_clock::now();
+
+    partition.clear();
+    partition.shrink_to_fit();
 
     // Step 4- merge all partitions
     uint64_t local_size_recv = local_partition.size();
