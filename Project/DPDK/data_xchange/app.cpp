@@ -23,7 +23,10 @@ static void WorkerStart() {
         }
     }
     while(1) {
-        receive_packets();
+        uint16_t port;
+        RTE_ETH_FOREACH_DEV(port) {
+         receive_packets(port);
+        }
     }
     print_stats();
 }

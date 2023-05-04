@@ -75,24 +75,26 @@ void send_packet(size_t port_id, int64_t *data, size_t data_len, struct rte_ethe
     //        window[port_id].next_seq - window[port_id].last_recv_seq <
     //            TCP_WINDOW_LEN) {
     //     int64_t seq_num = window[port_id].next_seq;
+    while (bytes_sent < data_len) {
         pkt = create_packet(seq_num, port_id, data_ptr, packet_len, dst_mac);
-    //     data_ptr += packet_len / sizeof(data_ptr[0]);
-    //     bytes_sent += packet_len;
-    //     pkts_send_buffer[num_packets] = pkt;
+        data_ptr += packet_len / sizeof(data_ptr[0]);
+        bytes_sent += packet_len;
+        pkts_send_buffer[num_packets] = pkt;
 
     //     window[port_id].next_seq++;
-    //     num_packets++;
+        num_packets++;
 
     //     if (starting_seq_num == -1) {
     //         starting_seq_num = seq_num;
     //     }
-    // }
+    }
 
-    // if (num_packets > 0) {
+    if (num_packets > 0) {
     //     // SEND PACKETS
         // uint64_t start_time = raw_time();
         uint64_t packets_sent =
             rte_eth_tx_burst(1, 0, pkts_send_buffer, num_packets);
+    printf("Sent burst of %u packets with length %lu\n", (unsigned)packets_sent, packet_len);
         // printf("Flow: %u, Sent packets : %u\n", port_id,
         // total_packets_sent[port_id]);
     //     total_packets_sent[port_id] += packets_sent;
@@ -100,7 +102,7 @@ void send_packet(size_t port_id, int64_t *data, size_t data_len, struct rte_ethe
     //         int64_t seq_num = starting_seq_num + i;
     //         timer[seq_num].start_time = start_time;
     //     }
-    // }
+    }
 }
 
 void process_packets(uint16_t num_recvd, struct rte_mbuf **pkts,
@@ -130,9 +132,9 @@ void process_packets(uint16_t num_recvd, struct rte_mbuf **pkts,
     }
 }
 
-void receive_packets() {
+void receive_packets(uint16_t port) {
     uint64_t packets_recvd =
-        rte_eth_rx_burst(1, 0, pkts_recv_buffer, 200);
+        rte_eth_rx_burst(port, 0, pkts_recv_buffer, 200);
     uint64_t end_time = raw_time();
 
     if (packets_recvd > 0) {
@@ -249,7 +251,7 @@ int WorkerSetup(int argc, char *argv[]) {
 
     /* Initializing all ports. 8< */
     RTE_ETH_FOREACH_DEV(portid)
-    if (portid == 1 && port_init(portid, mbuf_pool) != 0)
+    if (port_init(portid, mbuf_pool) != 0)
         rte_exit(EXIT_FAILURE, "Cannot init port %" PRIu16 "\n", portid);
     /* >8 End of initializing all ports. */
 

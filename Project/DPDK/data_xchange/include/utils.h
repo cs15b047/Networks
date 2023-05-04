@@ -176,7 +176,7 @@ static int parse_packet(struct sockaddr_in *src, struct sockaddr_in *dst,
 /* Main functional part of port initialization. 8< */
 static inline int port_init(uint16_t port, struct rte_mempool *mbuf_pool) {
     struct rte_eth_conf port_conf;
-    const uint16_t rx_rings = 1, tx_rings = 1;
+    const uint16_t rx_rings = 2, tx_rings = 2;
     uint16_t nb_rxd = RX_RING_SIZE;
     uint16_t nb_txd = TX_RING_SIZE;
     int retval;
