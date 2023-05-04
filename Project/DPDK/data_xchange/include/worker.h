@@ -29,7 +29,7 @@ struct timer_info overall_time;
 
 
 struct rte_mbuf *create_packet(uint32_t seq_num, size_t port_id, int64_t *data,
-                               size_t pkt_len) {
+                               size_t pkt_len, struct rte_ether_addr *dst_mac) {
     struct rte_ether_hdr *eth_hdr;
     struct rte_ipv4_hdr *ipv4_hdr;
     struct rte_tcp_hdr *tcp_hdr;
@@ -43,7 +43,7 @@ struct rte_mbuf *create_packet(uint32_t seq_num, size_t port_id, int64_t *data,
     uint8_t *ptr = rte_pktmbuf_mtod(pkt, uint8_t *);
     /* add in an ethernet header */
     eth_hdr = (struct rte_ether_hdr *)ptr;
-    set_eth_hdrs(eth_hdr, &DST_MAC);
+    set_eth_hdrs(eth_hdr, dst_mac);
     ptr += sizeof(*eth_hdr);
     header_size += sizeof(*eth_hdr);
 
@@ -64,7 +64,7 @@ struct rte_mbuf *create_packet(uint32_t seq_num, size_t port_id, int64_t *data,
     return pkt;
 }
 
-void send_packet(size_t port_id, int64_t *data, size_t data_len) {
+void send_packet(size_t port_id, int64_t *data, size_t data_len, struct rte_ether_addr *dst_mac) {
     // CREATE PACKETS
     int64_t num_packets = 0, starting_seq_num = -1;
     int64_t *data_ptr = data;
@@ -75,7 +75,7 @@ void send_packet(size_t port_id, int64_t *data, size_t data_len) {
     //        window[port_id].next_seq - window[port_id].last_recv_seq <
     //            TCP_WINDOW_LEN) {
     //     int64_t seq_num = window[port_id].next_seq;
-        pkt = create_packet(seq_num, port_id, data_ptr, packet_len);
+        pkt = create_packet(seq_num, port_id, data_ptr, packet_len, dst_mac);
     //     data_ptr += packet_len / sizeof(data_ptr[0]);
     //     bytes_sent += packet_len;
     //     pkts_send_buffer[num_packets] = pkt;
@@ -206,15 +206,15 @@ void print_stats() {
     }
 }
 
-static void send_partition(vector<int64_t> &partition) {
+static void send_partition(vector<int64_t> &partition, struct rte_ether_addr *dst_mac, int worker_rank) {
     int64_t partition_len = partition.size();
     size_t port_id = 0;
 
     init_window();
     printf("Starting main loop\n");
     overall_time.start_time = raw_time();
-    send_packet(port_id, &partition_len, sizeof(partition_len));
-    send_packet(port_id, partition.data(), sizeof(partition[0]) * partition_len);
+    send_packet(port_id, &partition_len, sizeof(partition_len), dst_mac);
+    send_packet(port_id, partition.data(), sizeof(partition[0]) * partition_len, dst_mac);
       
     overall_time.end_time = raw_time();
 

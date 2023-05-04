@@ -42,7 +42,18 @@ int packet_len = 1000;
 int ack_len = 10;
 
 // Specify the dst mac address and default ip here here:
-struct rte_ether_addr DST_MAC = {{0x14, 0x58, 0xD0, 0x58, 0x7F, 0xF3}};
+// struct rte_ether_addr DST_MAC = {{0x14, 0x58, 0xD0, 0x58, 0x7F, 0xF3}};
+
+// 14:58:d0:58:7f:f3
+// 14:58:d0:58:fe:e3
+// 14:58:d0:58:1f:33
+
+vector<struct rte_ether_addr> worker_macs = {
+    {{0x14, 0x58, 0xD0, 0x58, 0x7F, 0xF3}},
+    {{0x14, 0x58, 0xD0, 0x58, 0xFE, 0xE3}},
+    {{0x14, 0x58, 0xD0, 0x58, 0x1F, 0x33}},
+};
+
 const char *DEFAULT_IP = "127.0.0.1";
 
 static uint64_t raw_time(void) {

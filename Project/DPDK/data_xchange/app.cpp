@@ -12,11 +12,16 @@ struct partition_info {
 typedef struct partition_info partition_info_t;
 vector<partition_info_t> all_partition_data;
 partition_info_t own_partition_data;
-
+int num_workers;
+int own_rank;
 
 
 static void WorkerStart() {
-    send_partition(own_partition_data.data);
+    for(int i = 0; i < num_workers; i++) {
+        if (i != own_rank) {
+            send_partition(own_partition_data.data, &worker_macs[i], own_rank);
+        }
+    }
     while(1) {
         receive_packets();
     }
@@ -37,13 +42,14 @@ int WorkerNode(int argc, char *argv[]) {
 
 
 int main(int argc, char *argv[]) {
-    if (argc != 3) {
-        printf("usage: ./sort <flow size gb> <rank>\n");
+    if (argc != 4) {
+        printf("usage: ./sort <flow size gb> <rank> <num workers>\n");
         return -1;
     }
     
-    int64_t data_len = (int64_t)atoi(argv[1]);;
-    int rank = atoi(argv[2]);
+    int64_t data_len = (int64_t)atoi(argv[1]);
+    own_rank = atoi(argv[2]);
+    num_workers = atoi(argv[3]);
 
     own_partition_data.data_len = data_len;
     own_partition_data.data.resize(data_len);
