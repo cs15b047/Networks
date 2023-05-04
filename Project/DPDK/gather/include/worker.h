@@ -206,6 +206,7 @@ void print_stats() {
 
 static void send_partition(vector<int64_t> &partition, struct rte_ether_addr *dst_mac, int worker_rank) {
     int64_t partition_len = partition.size();
+    vector<int64_t> partition_id_info = {worker_rank, partition_len};
     timer = (timer_info *)malloc(NUM_PACKETS * sizeof(timer_info));
     packet_infos = (parsed_packet_info *)malloc(TCP_WINDOW_LEN *
                                                 sizeof(parsed_packet_info));
@@ -216,7 +217,7 @@ static void send_partition(vector<int64_t> &partition, struct rte_ether_addr *ds
     overall_time.start_time = raw_time();
     while (!all_flows_completed(flow_completed)) {
         if (window[port_id].last_recv_seq < NUM_PACKETS) {
-            send_packet(port_id, &partition_len, sizeof(partition_len), dst_mac);
+            send_packet(port_id, partition_id_info.data(), sizeof(partition_id_info[0]) * partition_id_info.size(), dst_mac);
             send_packet(port_id, partition.data(), sizeof(partition[0]) * partition_len, dst_mac);
             // POLL ON RECEIVE PACKETS
             receive_packets();

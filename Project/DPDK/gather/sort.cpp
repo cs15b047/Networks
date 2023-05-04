@@ -12,7 +12,7 @@ struct partition_info {
 };
 typedef struct partition_info partition_info_t;
 
-vector<int> partition_indices;
+unordered_map<int64_t, int64_t> partition_map;
 vector<partition_info_t> all_partition_data;
 partition_info_t own_partition_data;
 
@@ -37,28 +37,20 @@ void process_data(struct rte_ether_hdr *eth_h,
                     int64_t *local_data,
                     int payload_length) {
     int64_t partition_id = create_five_tuple_hash(eth_h, ip_h, tcp_h);
-    if (std::find(partition_indices.begin(), partition_indices.end(), partition_id) ==
-        partition_indices.end()) {
-        partition_info_t empty_partition_info;
-
-        if (partition_indices.size() == num_workers) {
-            partition_indices.clear();
-            all_partition_data.clear();
-        }
-        partition_indices.push_back(partition_id);
-        all_partition_data.push_back(empty_partition_info);
+    bool new_partition = false;
+    if (partition_map.find(partition_id) == partition_map.end()) {
+        partition_map[partition_id] = local_data[0];
+        new_partition = true;
         printf("New worker added with worker id: %ld\n", partition_id);
     }
 
-    int partition_idx =
-        std::find(partition_indices.begin(), partition_indices.end(), partition_id) -
-        partition_indices.begin();
+    int partition_idx = partition_map[partition_id];
     partition_info_t *partition_info = &all_partition_data[partition_idx];
-    if (partition_info->data_len == -1) {
-        partition_info->data_len = local_data[0];
+    if (new_partition) {
+        partition_info->data_len = local_data[1];
         partition_info->data.resize(partition_info->data_len);
         partition_info->bytes_remaining =
-            local_data[0] * sizeof(partition_info->data[0]);
+            partition_info->data_len * sizeof(partition_info->data[0]);
     } else {
         int64_t *data_ptr = partition_info->data.data();
         int64_t elements_recvd =
@@ -97,11 +89,7 @@ void process_data(struct rte_ether_hdr *eth_h,
 
 
 int MasterNode(int argc, char *argv[]) {
-    int ret = MasterSetup(argc, argv);
-	if (ret < 0) {
-		printf("Error setting up master\n");
-		return ret;
-	}
+   
     MasterStart();
 	MasterStop();
 
@@ -124,11 +112,11 @@ static void WorkerStart() {
 
 
 int WorkerNode(int argc, char *argv[]) {
-    int ret = WorkerSetup(argc, argv, own_partition_data.data_len);
-    if (ret < 0) {
-        printf("Error setting up master\n");
-        return ret;
-    }
+    // int ret = WorkerSetup(argc, argv, own_partition_data.data_len);
+    // if (ret < 0) {
+    //     printf("Error setting up master\n");
+    //     return ret;
+    // }
     WorkerStart();
     WorkerStop();
     return 0;
@@ -136,7 +124,7 @@ int WorkerNode(int argc, char *argv[]) {
 
 
 int main(int argc, char *argv[]) {
-    if (argc != 3) {
+    if (argc != 4) {
         printf("usage: ./sort <flow size gb> <rank> <num_workers>\n");
         return -1;
     }
@@ -149,13 +137,20 @@ int main(int argc, char *argv[]) {
     own_partition_data.data.resize(data_len);
     own_partition_data.received = true;
     generate_random_data(own_partition_data.data);
-    //sort own_partition_data.data
+   
+    int ret = MasterSetup(argc, argv);
+	if (ret < 0) {
+		printf("Error setting up master\n");
+		return ret;
+	}
+
+     //sort own_partition_data.data
     sort(own_partition_data.data.begin(), own_partition_data.data.end());
+
     printf("Worker %ld starting in 5 seconds\n", own_rank);
     sleep(5);
     
     if (own_rank == 0) {
-        partition_indices.push_back(own_rank);
         all_partition_data.push_back(own_partition_data);
     }
 

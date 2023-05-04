@@ -124,10 +124,10 @@ static void MasterStart(void) {
             struct rte_tcp_hdr *tcp_h;
             uint8_t i;
             int ret;
-            uint8_t nb_replies = 0;
+            // uint8_t nb_replies = 0;
 
-            struct rte_mbuf *acks[BURST_SIZE];
-            struct rte_mbuf *ack;
+            // struct rte_mbuf *acks[BURST_SIZE];
+            // struct rte_mbuf *ack;
 
 
             const uint16_t nb_rx = rte_eth_rx_burst(port, 0, bufs, BURST_SIZE);
@@ -161,19 +161,19 @@ static void MasterStart(void) {
 
                 process_data(eth_h, ip_h, tcp_h, local_data, payload_length);
 
-                ack = create_ack(eth_h, ip_h, tcp_h);
-                if (ack == NULL) {
-                    printf("Error allocating tx mbuf\n");
-                    return;
-                }
+                // ack = create_ack(eth_h, ip_h, tcp_h);
+                // if (ack == NULL) {
+                //     printf("Error allocating tx mbuf\n");
+                //     return;
+                // }
 
-                acks[nb_replies++] = ack;
+                // acks[nb_replies++] = ack;
                 rte_pktmbuf_free(bufs[i]);
             }
 
-            if (nb_replies > 0) {
-                rte_eth_tx_burst(port, 0, acks, nb_replies);
-            }
+            // if (nb_replies > 0) {
+            //     rte_eth_tx_burst(port, 0, acks, nb_replies);
+            // }
         }
     }
 }
