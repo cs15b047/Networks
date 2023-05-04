@@ -1,6 +1,7 @@
 #include "include/master.h"
 #include "include/worker.h"
-#define TOTAL_PARTITIONS 3
+#include <unistd.h>
+
 
 struct partition_info {
     int64_t data_len = -1;
@@ -15,12 +16,14 @@ vector<int> partition_indices;
 vector<partition_info_t> all_partition_data;
 partition_info_t own_partition_data;
 
+size_t own_rank, num_workers;
+
 bool all_partitions_received() {
-    if (all_partition_data.size() < TOTAL_PARTITIONS) {
+    if (all_partition_data.size() < num_workers) {
         return false;
     }
 
-    for (size_t i = 0; i < TOTAL_PARTITIONS; i++) {
+    for (size_t i = 0; i < num_workers; i++) {
         if (!all_partition_data[i].received) {
             return false;
         }
@@ -38,7 +41,7 @@ void process_data(struct rte_ether_hdr *eth_h,
         partition_indices.end()) {
         partition_info_t empty_partition_info;
 
-        if (partition_indices.size() == TOTAL_PARTITIONS) {
+        if (partition_indices.size() == num_workers) {
             partition_indices.clear();
             all_partition_data.clear();
         }
@@ -78,7 +81,7 @@ void process_data(struct rte_ether_hdr *eth_h,
     if(all_partitions_received()) {
         printf("All partitions received\n");
         vector<int64_t> all_data;
-        for (size_t i = 0; i < TOTAL_PARTITIONS; i++) {
+        for (size_t i = 0; i < num_workers; i++) {
             all_data.insert(all_data.end(), all_partition_data[i].data.begin(),
                             all_partition_data[i].data.end());
         }
@@ -108,7 +111,14 @@ int MasterNode(int argc, char *argv[]) {
 
 
 static void WorkerStart() {
-    send_partition(own_partition_data.data);
+    
+    for(size_t i = 0; i < num_workers; i++) {
+        if (i != own_rank) {
+            send_partition(own_partition_data.data, &worker_macs[i], own_rank);
+        }
+    }
+
+    // send_partition(own_partition_data.data);
     print_stats();
 }
 
@@ -127,12 +137,13 @@ int WorkerNode(int argc, char *argv[]) {
 
 int main(int argc, char *argv[]) {
     if (argc != 3) {
-        printf("usage: ./sort <flow size gb> <rank>\n");
+        printf("usage: ./sort <flow size gb> <rank> <num_workers>\n");
         return -1;
     }
     
     int64_t data_len = (int64_t)atoi(argv[1]);;
-    int rank = atoi(argv[2]);
+    own_rank = atoi(argv[2]);
+    num_workers = atoi(argv[3]);
 
     own_partition_data.data_len = data_len;
     own_partition_data.data.resize(data_len);
@@ -140,12 +151,17 @@ int main(int argc, char *argv[]) {
     generate_random_data(own_partition_data.data);
     //sort own_partition_data.data
     sort(own_partition_data.data.begin(), own_partition_data.data.end());
-
-    if (rank == 0) {
-        partition_indices.push_back(rank);
+    printf("Worker %ld starting in 5 seconds\n", own_rank);
+    sleep(5);
+    
+    if (own_rank == 0) {
+        partition_indices.push_back(own_rank);
         all_partition_data.push_back(own_partition_data);
-        return MasterNode(argc, argv);
-    } else {
-        return WorkerNode(argc, argv);
     }
+
+    thread t1(MasterNode, argc, argv);
+    thread t2(WorkerNode, argc, argv);
+
+    t1.join();
+    t2.join();
 }

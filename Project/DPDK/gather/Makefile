@@ -3,6 +3,7 @@ include common.mk
 
 SORT_SRC := sort.cpp
 CFLAGS += -Wall -std=c++11 -O3
+LDFLAGS += -lpthread
 
 all: clean build/sort
 
