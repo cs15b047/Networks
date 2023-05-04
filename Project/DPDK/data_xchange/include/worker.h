@@ -5,6 +5,7 @@
 #include "bits/stdc++.h"
 #include "utils.h"
 #include <cmath>
+#include <unistd.h>
 
 using namespace std;
 
@@ -12,9 +13,9 @@ using namespace std;
 #define OVERALL_LATENCY_STATS 1
 #define BANDWIDTH_STATS 2
 #define MULTI_FLOW_BANDWIDTH_STATS 3
-
-struct rte_mbuf *pkts_recv_buffer[TCP_WINDOW_LEN];
-struct rte_mbuf *pkts_send_buffer[TCP_WINDOW_LEN];
+#define BUFFER_SIZE 1000
+struct rte_mbuf *pkts_recv_buffer[BUFFER_SIZE];
+struct rte_mbuf *pkts_send_buffer[BUFFER_SIZE];
 struct rte_mbuf *pkt;
 
 uint64_t packets_recvd, packets_sent;
@@ -26,14 +27,19 @@ sliding_info window[FLOW_NUM];
 timer_info *timer;
 parsed_packet_info *packet_infos;
 struct timer_info overall_time;
-
+size_t recvd_bytes = 0;
 
 struct rte_mbuf *create_packet(uint32_t seq_num, size_t port_id, int64_t *data,
                                size_t pkt_len, struct rte_ether_addr *dst_mac) {
     struct rte_ether_hdr *eth_hdr;
     struct rte_ipv4_hdr *ipv4_hdr;
     struct rte_tcp_hdr *tcp_hdr;
-
+    
+    int ret = rte_mempool_avail_count(mbuf_pool);
+    if (ret < 0) {
+        return NULL;
+    }
+    
     struct rte_mbuf *pkt = rte_pktmbuf_alloc(mbuf_pool);
     if (pkt == NULL) {
         printf("Error allocating tx mbuf\n");
@@ -75,35 +81,30 @@ void send_packet(size_t port_id, int64_t *data, size_t data_len, struct rte_ethe
     //        window[port_id].next_seq - window[port_id].last_recv_seq <
     //            TCP_WINDOW_LEN) {
     //     int64_t seq_num = window[port_id].next_seq;
+    printf("Sending packet of size %lu\n", data_len);
     while (bytes_sent < data_len) {
-        pkt = create_packet(seq_num, port_id, data_ptr, packet_len, dst_mac);
-        data_ptr += packet_len / sizeof(data_ptr[0]);
-        bytes_sent += packet_len;
-        pkts_send_buffer[num_packets] = pkt;
+        while(bytes_sent < data_len) {
+            pkt = create_packet(seq_num, port_id, data_ptr, packet_len, dst_mac);
+            if (pkt == NULL) {
+                printf("Error creating packet\n");
+                break;
+            }
+            data_ptr += packet_len / sizeof(data_ptr[0]);
+            bytes_sent += packet_len;
+            pkts_send_buffer[num_packets] = pkt;
+            num_packets++;
 
-    //     window[port_id].next_seq++;
-        num_packets++;
+        }
 
-    //     if (starting_seq_num == -1) {
-    //         starting_seq_num = seq_num;
-    //     }
-    }
-
-    if (num_packets > 0) {
-    //     // SEND PACKETS
-        // uint64_t start_time = raw_time();
-        uint64_t packets_sent =
-            rte_eth_tx_burst(1, 0, pkts_send_buffer, num_packets);
-    printf("Sent burst of %u packets with length %lu\n", (unsigned)packets_sent, packet_len);
-        // printf("Flow: %u, Sent packets : %u\n", port_id,
-        // total_packets_sent[port_id]);
-    //     total_packets_sent[port_id] += packets_sent;
-    //     for (int64_t i = 0; i < num_packets; i++) {
-    //         int64_t seq_num = starting_seq_num + i;
-    //         timer[seq_num].start_time = start_time;
-    //     }
+        if (num_packets > 0) {
+            uint64_t packets_sent =
+                rte_eth_tx_burst(1, 0, pkts_send_buffer, num_packets);
+            num_packets = 0;
+            memset(pkts_send_buffer, 0, sizeof(pkts_send_buffer));
+        }
     }
 }
+
 
 void process_packets(uint16_t num_recvd, struct rte_mbuf **pkts,
                      parsed_packet_info *packet_infos) {
@@ -116,7 +117,8 @@ void process_packets(uint16_t num_recvd, struct rte_mbuf **pkts,
         size_t payload_length = 0;
         int f_num =
             parse_packet(&src, &dst, &payload, &payload_length, pkts[i]);
-        printf("Received packet of payload length: %lu\n", payload_length);
+        printf("Received packet of size %lu\n", payload_length);
+        recvd_bytes += payload_length;
 
         // tcp_h = rte_pktmbuf_mtod_offset(pkts[i], struct rte_tcp_hdr *,
         //                                 sizeof(struct rte_ether_hdr) +
@@ -132,17 +134,16 @@ void process_packets(uint16_t num_recvd, struct rte_mbuf **pkts,
     }
 }
 
-void receive_packets(uint16_t port, uint16_t queue_id) {
-    uint64_t packets_recvd = 0;
-    // do{
-        packets_recvd = rte_eth_rx_burst(port, queue_id, pkts_recv_buffer, 200);
-    // }   while(packets_recvd != 0);
-    // uint64_t end_time = raw_time();
+void receive_packets(uint16_t port) {
+    uint64_t packets_recvd =
+        rte_eth_rx_burst(port, 0, pkts_recv_buffer, 200);
+    uint64_t end_time = raw_time();
 
     if (packets_recvd > 0) {
 
         // PROCESS PACKETS
         process_packets(packets_recvd, pkts_recv_buffer, packet_infos);
+        printf("Total bytes received: %lu\n", recvd_bytes);
         // for (uint64_t f = 0; f < packets_recvd; f++) {
         //     if (packet_infos[f].flow_num != -1) {
 

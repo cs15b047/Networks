@@ -1,6 +1,7 @@
 
 #include "include/worker.h"
 #include <unistd.h>
+
 struct partition_info {
     int64_t data_len = -1;
     int64_t bytes_remaining = -1;
@@ -25,8 +26,7 @@ static void WorkerStart() {
         }
     }
     while(1) {
-        uint16_t port, queue;
-
+        uint16_t port;
         RTE_ETH_FOREACH_DEV(port) {
             if(port != 1)
                 continue;
@@ -54,6 +54,7 @@ int main(int argc, char *argv[]) {
         printf("usage: ./sort <flow size gb> <rank> <num workers>\n");
         return -1;
     }
+    setbuf(stdout, NULL);
     
     int64_t data_len = (int64_t)atoi(argv[1]);
     own_rank = atoi(argv[2]);
