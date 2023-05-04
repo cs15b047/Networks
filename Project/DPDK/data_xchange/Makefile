@@ -9,6 +9,9 @@ all: clean build/app
 build/app: $(SORT_SRC) Makefile $(PC_FILE) | build
 	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS) $(LDFLAGS_SHARED)
 
+debug: CFLAGS += -g
+debug: all
+
 build:
 	@mkdir -p $@
 

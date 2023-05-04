@@ -17,7 +17,7 @@ int own_rank;
 
 
 static void WorkerStart() {
-    printf("Worker %d starting after 5 seconds\n", own_rank);
+    printf("Worker %d starting in 5 seconds\n", own_rank);
     sleep(5);
     for(int i = 0; i < num_workers; i++) {
         if (i != own_rank) {
@@ -28,11 +28,9 @@ static void WorkerStart() {
         uint16_t port, queue;
 
         RTE_ETH_FOREACH_DEV(port) {
-            if (port !=1) {
+            if(port != 1)
                 continue;
-            }
-            for(uint16_t queue_id = 0; queue_id < 2;queue_id++)
-                receive_packets(port,queue_id);
+         receive_packets(port);
         }
     }
     print_stats();
