@@ -1,0 +1,6 @@
+#ifndef SOCKET_UTILS_H
+#define SOCKET_UTILS_H
+
+#define DEFAULT_PORT 9100
+
+#endif // SOCKET_UTILS_H

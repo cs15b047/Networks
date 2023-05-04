@@ -1,1 +1,3 @@
 sort
+rdma_sort
+kernel_sort
