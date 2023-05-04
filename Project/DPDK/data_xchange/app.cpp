@@ -1,6 +1,6 @@
 
 #include "include/worker.h"
-
+#include <unistd.h>
 struct partition_info {
     int64_t data_len = -1;
     int64_t bytes_remaining = -1;
@@ -17,15 +17,22 @@ int own_rank;
 
 
 static void WorkerStart() {
+    printf("Worker %d starting after 5 seconds\n", own_rank);
+    sleep(5);
     for(int i = 0; i < num_workers; i++) {
         if (i != own_rank) {
             send_partition(own_partition_data.data, &worker_macs[i], own_rank);
         }
     }
     while(1) {
-        uint16_t port;
+        uint16_t port, queue;
+
         RTE_ETH_FOREACH_DEV(port) {
-         receive_packets(port);
+            if (port !=1) {
+                continue;
+            }
+            for(uint16_t queue_id = 0; queue_id < 2;queue_id++)
+                receive_packets(port,queue_id);
         }
     }
     print_stats();

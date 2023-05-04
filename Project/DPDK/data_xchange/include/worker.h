@@ -132,10 +132,12 @@ void process_packets(uint16_t num_recvd, struct rte_mbuf **pkts,
     }
 }
 
-void receive_packets(uint16_t port) {
-    uint64_t packets_recvd =
-        rte_eth_rx_burst(port, 0, pkts_recv_buffer, 200);
-    uint64_t end_time = raw_time();
+void receive_packets(uint16_t port, uint16_t queue_id) {
+    uint64_t packets_recvd = 0;
+    // do{
+        packets_recvd = rte_eth_rx_burst(port, queue_id, pkts_recv_buffer, 200);
+    // }   while(packets_recvd != 0);
+    // uint64_t end_time = raw_time();
 
     if (packets_recvd > 0) {
 
@@ -210,7 +212,7 @@ void print_stats() {
 
 static void send_partition(vector<int64_t> &partition, struct rte_ether_addr *dst_mac, int worker_rank) {
     int64_t partition_len = partition.size();
-    size_t port_id = 0;
+    size_t port_id = 1;
 
     init_window();
     printf("Starting main loop\n");
@@ -251,7 +253,7 @@ int WorkerSetup(int argc, char *argv[]) {
 
     /* Initializing all ports. 8< */
     RTE_ETH_FOREACH_DEV(portid)
-    if (port_init(portid, mbuf_pool) != 0)
+    if (portid == 1 && port_init(portid, mbuf_pool) != 0)
         rte_exit(EXIT_FAILURE, "Cannot init port %" PRIu16 "\n", portid);
     /* >8 End of initializing all ports. */
 
