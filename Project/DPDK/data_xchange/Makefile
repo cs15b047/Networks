@@ -3,6 +3,7 @@ include common.mk
 
 SORT_SRC := app.cpp
 CFLAGS += -std=c++11 -O3
+LDFLAGS += -lpthread
 
 all: clean build/app
 

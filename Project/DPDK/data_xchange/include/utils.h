@@ -393,13 +393,27 @@ int64_t create_five_tuple_hash(struct rte_ether_hdr *eth_h,
     hash_data = eth_h->src_addr.addr_bytes[0] + eth_h->src_addr.addr_bytes[1] +
                 eth_h->src_addr.addr_bytes[2] + eth_h->src_addr.addr_bytes[3] +
                 eth_h->src_addr.addr_bytes[4] + eth_h->src_addr.addr_bytes[5];
-    hash_data += eth_h->dst_addr.addr_bytes[0] + eth_h->dst_addr.addr_bytes[1] +
-                 eth_h->dst_addr.addr_bytes[2] + eth_h->dst_addr.addr_bytes[3] +
-                 eth_h->dst_addr.addr_bytes[4] + eth_h->dst_addr.addr_bytes[5];
     hash_data += ip_h->src_addr + ip_h->dst_addr;
     hash_data += tcp_h->src_port + tcp_h->dst_port;
 
     return hasher(hash_data);
+}
+
+void check_numa() {
+	uint16_t port;
+    /*
+     * Check that the port is on the same NUMA node as the polling thread
+     * for best performance.
+     */
+    RTE_ETH_FOREACH_DEV(port)
+    if (rte_eth_dev_socket_id(port) >= 0 &&
+        rte_eth_dev_socket_id(port) != (int)rte_socket_id())
+        printf("WARNING, port %u is on remote NUMA node to "
+               "polling thread.\n\tPerformance will "
+               "not be optimal.\n",
+               port);
+
+    printf("\nCore %u forwarding packets. [Ctrl+C to quit]\n", rte_lcore_id());
 }
 
 
