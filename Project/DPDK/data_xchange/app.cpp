@@ -33,22 +33,22 @@ void process_data(struct rte_ether_hdr *eth_h,
 }
 
 
+
+
 static void WorkerStart() {
     printf("Worker %d starting in 5 seconds\n", own_rank);
     sleep(5);
-    for(int i = 0; i < num_workers; i++) {
-        if (i != own_rank) {
-            send_partition(own_partition_data.data, &worker_macs[i], own_rank);
+    thread send_thread = thread([&]() { 
+        for(int i = 0; i < num_workers; i++) {
+            if (i != own_rank) {
+                send_partition(own_partition_data.data, &worker_macs[i], own_rank);
+            }
         }
-    }
-    while(1) {
-        uint16_t port;
-        RTE_ETH_FOREACH_DEV(port) {
-            if(port != 1)
-                continue;
-         receive_packets(port);
-        }
-    }
+    });
+    thread recv_thread(receive_packets);
+    send_thread.join();
+    recv_thread.join();
+   
     print_stats();
 }
 

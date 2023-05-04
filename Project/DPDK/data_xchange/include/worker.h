@@ -16,7 +16,6 @@ using namespace std;
 #define BUFFER_SIZE 1000
 struct rte_mbuf *pkts_recv_buffer[BUFFER_SIZE];
 struct rte_mbuf *pkts_send_buffer[BUFFER_SIZE];
-struct rte_mbuf *pkt;
 
 uint64_t packets_recvd, packets_sent;
 uint64_t total_packets_sent[FLOW_NUM], total_packets_recvd[FLOW_NUM];
@@ -84,6 +83,7 @@ void send_packet(size_t port_id, int64_t *data, size_t data_len, struct rte_ethe
     int64_t *data_ptr = data;
     size_t bytes_sent = 0;
     int64_t seq_num = 0;
+    struct rte_mbuf *pkt;
 
     // while (bytes_sent < data_len && window[port_id].next_seq < NUM_PACKETS &&
     //        window[port_id].next_seq - window[port_id].last_recv_seq <
@@ -118,6 +118,7 @@ void process_packets(uint16_t num_recvd, struct rte_mbuf **pkts,
                      parsed_packet_info *packet_infos) {
     printf("Received burst of %u\n", (unsigned)num_recvd);
     struct rte_tcp_hdr *tcp_h;
+    struct rte_mbuf *pkt;
 
   struct rte_ether_hdr *eth_h;
             struct rte_ipv4_hdr *ip_h;
@@ -159,25 +160,97 @@ void process_packets(uint16_t num_recvd, struct rte_mbuf **pkts,
     }
 }
 
-void receive_packets(uint16_t port) {
-    uint64_t packets_recvd =
-        rte_eth_rx_burst(port, 0, pkts_recv_buffer, 200);
-    uint64_t end_time = raw_time();
+// void receive_packets(uint16_t port) {
+//     uint64_t packets_recvd =
+//         rte_eth_rx_burst(port, 0, pkts_recv_buffer, 200);
+//     uint64_t end_time = raw_time();
 
-    if (packets_recvd > 0) {
+//     if (packets_recvd > 0) {
 
-        // PROCESS PACKETS
-        process_packets(packets_recvd, pkts_recv_buffer, packet_infos);
-        printf("Total bytes received: %lu\n", recvd_bytes);
-        // for (uint64_t f = 0; f < packets_recvd; f++) {
-        //     if (packet_infos[f].flow_num != -1) {
+//         // PROCESS PACKETS
+//         process_packets(packets_recvd, pkts_recv_buffer, packet_infos);
+//         printf("Total bytes received: %lu\n", recvd_bytes);
+//         // for (uint64_t f = 0; f < packets_recvd; f++) {
+//         //     if (packet_infos[f].flow_num != -1) {
 
-        //         window[packet_infos[f].flow_num].last_recv_seq++;
+//         //         window[packet_infos[f].flow_num].last_recv_seq++;
 
-        //         total_packets_recvd[packet_infos[f].flow_num]++;
-        //         timer[packet_infos[f].ack_num].end_time = end_time;
-        //     }
-        // }
+//         //         total_packets_recvd[packet_infos[f].flow_num]++;
+//         //         timer[packet_infos[f].ack_num].end_time = end_time;
+//         //     }
+//         // }
+//     }
+// }
+
+
+void receive_packets() {
+      uint16_t port;
+    
+    check_numa();
+    /* Main work of application loop. 8< */
+    for (;;) {
+        RTE_ETH_FOREACH_DEV(port) {
+            if (port != 1)
+                continue;
+
+            struct rte_mbuf *bufs[BURST_SIZE];
+            struct rte_mbuf *pkt;
+            struct rte_ether_hdr *eth_h;
+            struct rte_ipv4_hdr *ip_h;
+            struct rte_tcp_hdr *tcp_h;
+            uint8_t i;
+            int ret;
+            uint8_t nb_replies = 0;
+
+            struct rte_mbuf *acks[BURST_SIZE];
+            struct rte_mbuf *ack;
+
+
+            const uint16_t nb_rx = rte_eth_rx_burst(port, 0, bufs, BURST_SIZE);
+            if (unlikely(nb_rx == 0))
+                continue;
+
+            // Process received packets
+            for (i = 0; i < nb_rx; i++) {
+                pkt = bufs[i];
+                  struct sockaddr_in src, dst;
+                int tcp_port_id;
+                int64_t *local_data = NULL;
+                size_t payload_length = 0;
+
+                local_data = NULL;
+                payload_length = 0;
+
+                tcp_port_id =
+                    parse_packet(&src, &dst, &local_data, &payload_length, pkt);
+                if (tcp_port_id == 0) {
+                    printf("Ignoring Bad MAC packet\n");
+                    rte_pktmbuf_free(pkt);
+                    continue;
+                }
+
+                ret = extract_headers(pkt, eth_h, ip_h, tcp_h);
+                if (ret < 0) {
+                    rte_pktmbuf_free(pkt);
+                    continue;
+                }
+
+                process_data(eth_h, ip_h, tcp_h, local_data, payload_length);
+
+                // ack = create_ack(eth_h, ip_h, tcp_h);
+                // if (ack == NULL) {
+                //     printf("Error allocating tx mbuf\n");
+                //     return;
+                // }
+
+                // acks[nb_replies++] = ack;
+                rte_pktmbuf_free(bufs[i]);
+            }
+
+            // if (nb_replies > 0) {
+            //     rte_eth_tx_burst(port, 0, acks, nb_replies);
+            // }
+        }
     }
 }
 
