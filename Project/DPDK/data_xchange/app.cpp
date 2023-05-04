@@ -42,7 +42,7 @@ void process_data(struct rte_ether_hdr *eth_h,
 
     int partition_idx = partition_map[hash_val];
     partition_info_t *partition_info = &all_partition_data[partition_idx];
-    if (new_worker) {
+    if (new_worker && partition_info->data_len == -1) {
         partition_info->data_len = local_data[1];
         partition_info->data.resize(partition_info->data_len);
         partition_info->bytes_remaining =

@@ -99,10 +99,10 @@ void send_packet(size_t port_id, int64_t *data, size_t data_len, struct rte_ethe
         if (num_packets > 0) {
             uint64_t packets_sent =
                 rte_eth_tx_burst(1, 0, pkts_send_buffer, num_packets);
-            num_packets = 0;
-            for (int i = 0; i < packets_sent; i++) {
+            for (int i = 0; i < num_packets; i++) {
                 rte_pktmbuf_free(pkts_send_buffer[i]);
             }
+            num_packets = 0;
         }
     }
     printf("Sent %lu bytes\n", bytes_sent);
