@@ -311,7 +311,7 @@ static int client_remote_memory_ops(struct Connection* conn_state)
 	bzero(&conn_state->client_send_wr, sizeof(conn_state->client_send_wr));
 	conn_state->client_send_wr.sg_list = &conn_state->client_send_sge;
 	conn_state->client_send_wr.num_sge = 1;
-	conn_state->client_send_wr.opcode = IBV_WR_RDMA_WRITE;
+	conn_state->client_send_wr.opcode = IBV_WR_SEND;
 	conn_state->client_send_wr.send_flags = IBV_SEND_SIGNALED;
 	/* we have to tell server side info for RDMA */
 	conn_state->client_send_wr.wr.rdma.rkey = conn_state->server_metadata_attr.stag.remote_stag;
