@@ -20,10 +20,12 @@ vector<string> ip_addr;
 vector<Connection*> conn_state;
 vector<Connection*> clients;
 
+int base_port;
+
 struct sockaddr_in generate_server_info(int rank){
     struct sockaddr_in serv_addr;
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(DEFAULT_PORT + rank);
+    serv_addr.sin_port = htons(base_port + rank);
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     return serv_addr;
 }
@@ -32,7 +34,7 @@ struct sockaddr_in generate_server_info(int rank){
 struct sockaddr_in get_server_info(int rank){
     struct sockaddr_in serv_addr;
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(DEFAULT_PORT + rank);
+    serv_addr.sin_port = htons(base_port + rank);
     int idx = rank % ip_addr.size();
     serv_addr.sin_addr.s_addr = inet_addr(ip_addr[idx].c_str());
     return serv_addr;
@@ -194,7 +196,7 @@ long get_time(chrono::high_resolution_clock::time_point start, chrono::high_reso
 int main(int argc, char *argv[]) {
 
     if(argc != 5) {
-        cout << "Usage: ./sort <num_workers> <N> <ip_addr> <rank>" << endl;
+        cout << "Usage: ./sort <num_workers> <N> <ip_addr> <rank> <base_port>" << endl;
         exit(1);
     }
     long N;
@@ -211,6 +213,7 @@ int main(int argc, char *argv[]) {
         ip_addr.push_back(substr);
     }
     rank = atoi(argv[4]);
+    base_port = atoi(argv[5]);
 
     // Ranks are attached 
 

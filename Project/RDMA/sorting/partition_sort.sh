@@ -6,6 +6,7 @@ num_servers=$3
 ip=$4
 type=$5
 server_id=$6
+base_port=$7
 
 prog="kernel_sort"
 if [ $type = "rdma" ]
@@ -20,6 +21,6 @@ do
     # Run if the server ID is the same as the rank % num_servers
     if [ $((i % num_servers)) -eq $server_id ]
     then
-        ./$prog $workers $N $ip $i &
+        ./$prog $workers $N $ip $i $base_port &
     fi
 done
