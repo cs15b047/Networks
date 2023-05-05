@@ -20,6 +20,6 @@ do
     # Run if the server ID is the same as the rank % num_servers
     if [ $((i % num_servers)) -eq $server_id ]
     then
-        ./$prog $workers $N $ip $i &
+        time ./$prog $workers $N $ip $i &
     fi
 done
