@@ -7,10 +7,10 @@ ip=$4
 type=$5
 server_id=$6
 
-prog="kernel_sort"
+prog="./build/kernel_sort"
 if [ $type = "rdma" ]
 then
-    prog="rdma_sort"
+    prog="./build/rdma_sort"
     echo "Running RDMA sort"
 fi
 

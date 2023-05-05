@@ -5,7 +5,7 @@
  *          atrivedi@apache.org 
  */
 
-#include "rdma_common.h"
+#include "include/rdma_common.h"
 
 void show_rdma_cmid(struct rdma_cm_id *id)
 {

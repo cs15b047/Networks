@@ -4,9 +4,9 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 
-#include "rdma_utils.h"
-#include "rdma_client_utils.h"
-#include "sort_utils.h"
+#include "include/rdma_utils.h"
+#include "include/rdma_client_utils.h"
+#include "include/sort_utils.h"
 
 using namespace std;
 

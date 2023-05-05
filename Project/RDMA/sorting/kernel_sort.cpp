@@ -4,8 +4,8 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 
-#include "sort_utils.h"
-#include "socket_utils.h"
+#include "include/sort_utils.h"
+#include "include/socket_utils.h"
 
 using namespace std;
 
