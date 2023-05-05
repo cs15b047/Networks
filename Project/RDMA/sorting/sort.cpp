@@ -14,7 +14,7 @@ vector<string> ip_addr;
 vector<Connection*> conn_state;
 vector<Client*> clients;
 
-struct sockaddr_in generate_server_info(int rank){
+struct sockaddr_in generate_server_info(int64_t rank){
     struct sockaddr_in serv_addr;
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(DEFAULT_RDMA_PORT + rank);
@@ -23,33 +23,37 @@ struct sockaddr_in generate_server_info(int rank){
 }
 
 // rank runs on ip_addr[rank % ip_addr.size()] server
-struct sockaddr_in get_server_info(int rank){
+struct sockaddr_in get_server_info(int64_t rank){
     struct sockaddr_in serv_addr;
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(DEFAULT_RDMA_PORT + rank);
-    int idx = rank % ip_addr.size();
+    int64_t idx = rank % ip_addr.size();
     serv_addr.sin_addr.s_addr = inet_addr(ip_addr[idx].c_str());
     return serv_addr;
 }
 
 
 
-void setup_client(int dst_rank, struct Connection* conn_state) {
+void setup_client(int64_t dst_rank, struct Connection* conn_state) {
     struct sockaddr_in serv_addr = get_server_info(dst_rank);
-    int ret = client_prepare_connection(&serv_addr, conn_state);
+    int64_t ret = client_prepare_connection(&serv_addr, conn_state);
     ret = client_pre_post_recv_buffer(conn_state);
     // cout << ret << endl;
 }
 
-void send_partition(vector<Record*>& partition_starts, vector<int> partition_sizes, int rank, int num_workers) {
+void send_partition(vector<Record*>& partition_starts, vector<int64_t> partition_sizes, int64_t rank, int64_t num_workers) {
     cout << "Step 3: Sending partition pieces to all workers" << endl;
-    for(int dst_rank = 0; dst_rank < num_workers; dst_rank++) {
+    for(int64_t dst_rank = 0; dst_rank < num_workers; dst_rank++) {
         if(dst_rank == rank) continue;
+
+        char* buffer = (char *)partition_starts[dst_rank];
+        size_t buffer_size = (size_t)((size_t)partition_sizes[dst_rank] * sizeof(Record));
+        struct Connection* conn = conn_state[dst_rank];
         // cout << "Sending partition to rank " << dst_rank << endl;
         // cout << ret << endl;
-        int ret = client_xchange_metadata_with_server((char *)partition_starts[dst_rank], (size_t)(partition_sizes[dst_rank] * sizeof(Record)), conn_state[dst_rank]);
+        int64_t ret = client_xchange_metadata_with_server(buffer, buffer_size, conn);
         // cout << ret << endl;
-        ret = client_remote_memory_ops(conn_state[dst_rank]);
+        ret = client_remote_memory_ops(conn);
         // cout << ret << endl;
         // Send size first, then the partition
         cout << "Sending partition of size " << partition_sizes[dst_rank] << " to rank " << dst_rank << endl;
@@ -57,28 +61,28 @@ void send_partition(vector<Record*>& partition_starts, vector<int> partition_siz
     cout << "All partitions sent" << endl;
 
     // Cleanup
-    for(int i = 0; i < num_workers; i++) {
+    for(int64_t i = 0; i < num_workers; i++) {
         if(i == rank) continue;
-        int ret = client_disconnect_and_clean(conn_state[i]);
+        int64_t ret = client_disconnect_and_clean(conn_state[i]);
     }
 }
 
-void setup_server(int rank) {
+void setup_server(int64_t rank) {
     struct sockaddr_in serv_addr = generate_server_info(rank);
     cout << "Starting server" << endl;
-    int ret = start_rdma_server(&serv_addr);
+    int64_t ret = start_rdma_server(&serv_addr);
 }
 
-vector<int> receive_partitions(int num_workers, vector<Record>& merged_arr, uint64_t recv_ptr) {
-    vector<int> partition_sizes(num_workers);
+vector<int64_t> receive_partitions(int64_t num_workers, vector<Record>& merged_arr, uint64_t recv_ptr) {
+    vector<int64_t> partition_sizes(num_workers);
     partition_sizes[0] = recv_ptr;
 
     cout << "Accepted all client connections, start receiving partitions" << endl;
-    for(int i = 1; i < num_workers; i++) {
+    for(int64_t i = 1; i < num_workers; i++) {
         struct Client* client = clients[i];
         
         uint32_t partition_size = 0, bytes_to_recv;
-        int ret = send_server_metadata_to_client((char *) (merged_arr.data() + recv_ptr), bytes_to_recv, client);
+        int64_t ret = send_server_metadata_to_client((char *) (merged_arr.data() + recv_ptr), bytes_to_recv, client);
         partition_size = bytes_to_recv / sizeof(Record);
         partition_sizes[i] = partition_size;
         recv_ptr += (uint64_t)partition_size;
@@ -90,13 +94,15 @@ vector<int> receive_partitions(int num_workers, vector<Record>& merged_arr, uint
     assert (recv_ptr <= merged_arr.size());
     merged_arr.resize(recv_ptr);
 
+    cout << "Waiting for disconnect" << endl;
+
     // Disconnect and clean up RDMA server
-    for(int i = 1; i < num_workers; i++) {
-        int ret = disconnect(); // wait for client event to disconnect
+    for(int64_t i = 1; i < num_workers; i++) {
+        int64_t ret = disconnect(); // wait for client event to disconnect
         cout << "Disconnect: rc = " << ret << endl;
     }
-    for(int i = 1; i < num_workers; i++) {
-        int ret = cleanup(clients[i]);
+    for(int64_t i = 1; i < num_workers; i++) {
+        int64_t ret = cleanup(clients[i]);
         cout << "Cleanup: rc = " << ret << endl;
     }
     shutdown();
@@ -104,35 +110,35 @@ vector<int> receive_partitions(int num_workers, vector<Record>& merged_arr, uint
     return partition_sizes;
 }
 
-void setup_server_connection(int num_workers) {
+void setup_server_connection(int64_t num_workers) {
     cout << "Step 2: Setting up server connections" << endl;
     clients.resize(num_workers, NULL);
-    for(int i = 1; i < num_workers; i++) {
+    for(int64_t i = 1; i < num_workers; i++) {
         clients[i] = new Client();
         struct Client* client = clients[i];
         cout << "Setting up client " << i << endl;
-        int ret = setup_client_resources(client);
+        int64_t ret = setup_client_resources(client);
         cout << "Client setup: " << ret << endl;
     }
-    for(int i = 1; i < num_workers; i++) {
-        int ret = accept_client_connection(clients[i]);
+    for(int64_t i = 1; i < num_workers; i++) {
+        int64_t ret = accept_client_connection(clients[i]);
         cout << "Accepted client connection " << i << endl;
     }
     cout << "Accepted all client connections" << endl;
 }
 
-void setup_client_connection(int num_workers, int rank) {
+void setup_client_connection(int64_t num_workers, int64_t rank) {
     cout << "Workers: " << num_workers << ", rank: " << rank << endl;
     cout << "Step 2: Setting up client connections" << endl;
     conn_state.resize(num_workers, NULL);
-    for(int i = 0; i < num_workers; i++) {
+    for(int64_t i = 0; i < num_workers; i++) {
         conn_state[i] = new Connection();
     }
-    for(int dst_rank = 0; dst_rank < num_workers; dst_rank++){
+    for(int64_t dst_rank = 0; dst_rank < num_workers; dst_rank++){
         if(dst_rank == rank) continue;
         cout << "Setting up client connection to server " << dst_rank << endl;
         setup_client(dst_rank, conn_state[dst_rank]);
-        int ret = client_connect_to_server(conn_state[dst_rank]);
+        int64_t ret = client_connect_to_server(conn_state[dst_rank]);
         cout << "Connected to server " << dst_rank << endl;
     }
     cout << "Connected to all servers" << endl;
@@ -149,7 +155,7 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
     long N;
-    int rank, num_workers;
+    int64_t rank, num_workers;
     srand(time(NULL));
     num_workers = atoi(argv[1]);
     N = atol(argv[2]);
@@ -202,7 +208,7 @@ int main(int argc, char *argv[]) {
 
     // Step 2 - Divide the data into num_workers partitions based on data value
     vector<Record*> partition_starts;
-    vector<int> partition_sizes;
+    vector<int64_t> partition_sizes;
     auto partition_start = chrono::high_resolution_clock::now();
     partition_data(partition, partition_starts, partition_sizes, num_workers);
     auto partition_end = chrono::high_resolution_clock::now();
@@ -229,7 +235,7 @@ int main(int argc, char *argv[]) {
     // cout << "Local partition size: " << local_size << endl;
     local_partition.resize(new_size);
     auto resize_end = chrono::high_resolution_clock::now();
-    vector<int> partition_sizes_recv = receive_partitions(num_workers, local_partition, local_size);
+    vector<int64_t> partition_sizes_recv = receive_partitions(num_workers, local_partition, local_size);
     auto shuffle_recv_end = chrono::high_resolution_clock::now();
 
     send_thread.join();
