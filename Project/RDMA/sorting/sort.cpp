@@ -63,7 +63,8 @@ void send_partition(vector<Record*>& partition_starts, vector<int64_t> partition
     // Cleanup
     for(int64_t i = 0; i < num_workers; i++) {
         if(i == rank) continue;
-        int64_t ret = client_disconnect_and_clean(conn_state[i]);
+        int64_t ret = client_cleanup(conn_state[i]);
+        cout << "Client cleanup: rc = " << ret << endl;
     }
 }
 
@@ -93,19 +94,6 @@ vector<int64_t> receive_partitions(int64_t num_workers, vector<Record>& merged_a
     cout << "Recv ptr: " << recv_ptr << ", Merged array size = " << merged_arr.size() << endl;
     assert (recv_ptr <= merged_arr.size());
     merged_arr.resize(recv_ptr);
-
-    cout << "Waiting for disconnect" << endl;
-
-    // Disconnect and clean up RDMA server
-    for(int64_t i = 1; i < num_workers; i++) {
-        int64_t ret = disconnect(); // wait for client event to disconnect
-        cout << "Disconnect: rc = " << ret << endl;
-    }
-    for(int64_t i = 1; i < num_workers; i++) {
-        int64_t ret = cleanup(clients[i]);
-        cout << "Cleanup: rc = " << ret << endl;
-    }
-    shutdown();
 
     return partition_sizes;
 }

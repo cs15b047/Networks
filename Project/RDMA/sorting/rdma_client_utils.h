@@ -339,35 +339,12 @@ static int client_remote_memory_ops(struct Connection* conn_state)
 	return 0;
 }
 
-/* This function disconnects the RDMA connection from the server and cleans up 
- * all the resources.
- */
-static int client_disconnect_and_clean(struct Connection* conn_state)
-{
-	struct rdma_cm_event *cm_event = NULL;
-	int ret = -1;
-	/* active disconnect from the client side */
-	ret = rdma_disconnect(conn_state->cm_client_id);
-	if (ret) {
-		// rdma_error("Failed to disconnect, errno: %d \n", -errno);
-		//continuing anyways
-	}
-	ret = process_rdma_cm_event(conn_state->cm_event_channel_client, 
-			RDMA_CM_EVENT_DISCONNECTED,
-			&cm_event);
-	if (ret) {
-		// rdma_error("Failed to get RDMA_CM_EVENT_DISCONNECTED event, ret = %d\n", ret);
-		//continuing anyways 
-	}
-	ret = rdma_ack_cm_event(cm_event);
-	if (ret) {
-		// rdma_error("Failed to acknowledge cm event, errno: %d\n", -errno);
-		//continuing anyways
-	}
+
+static int client_cleanup(struct Connection* conn_state) {
 	/* Destroy QP */
 	rdma_destroy_qp(conn_state->cm_client_id);
 	/* Destroy client cm id */
-	ret = rdma_destroy_id(conn_state->cm_client_id);
+	int ret = rdma_destroy_id(conn_state->cm_client_id);
 	if (ret) {
 		// rdma_error("Failed to destroy client id cleanly, %d \n", -errno);
 		// we continue anyways;
@@ -396,6 +373,39 @@ static int client_disconnect_and_clean(struct Connection* conn_state)
 	}
 	rdma_destroy_event_channel(conn_state->cm_event_channel_client);
 	printf("Client resource clean up is complete \n");
+
+	return 0;
+}
+
+/* This function disconnects the RDMA connection from the server and cleans up 
+ * all the resources.
+ */
+static int client_disconnect_and_clean(struct Connection* conn_state)
+{
+	struct rdma_cm_event *cm_event = NULL;
+	int ret = -1;
+	/* active disconnect from the client side */
+	ret = rdma_disconnect(conn_state->cm_client_id);
+	if (ret) {
+		// rdma_error("Failed to disconnect, errno: %d \n", -errno);
+		//continuing anyways
+	}
+	ret = process_rdma_cm_event(conn_state->cm_event_channel_client, 
+			RDMA_CM_EVENT_DISCONNECTED,
+			&cm_event);
+	if (ret) {
+		// rdma_error("Failed to get RDMA_CM_EVENT_DISCONNECTED event, ret = %d\n", ret);
+		//continuing anyways 
+	}
+	ret = rdma_ack_cm_event(cm_event);
+	if (ret) {
+		// rdma_error("Failed to acknowledge cm event, errno: %d\n", -errno);
+		//continuing anyways
+	}
+	
+	// Cleanup client
+	ret = client_cleanup(conn_state);
+	if(ret) return ret;
 	return 0;
 }
 
