@@ -54,15 +54,9 @@ void send_partition(vector<Record*>& partition_starts, vector<int64_t> partition
         int64_t ret = client_xchange_metadata_with_server(buffer, buffer_size, conn);
         // cout << ret << endl;
         ret = client_remote_memory_ops(conn);
-        // cout << ret << endl;
+        cout << ret << endl;
         // Send size first, then the partition
         cout << "Sending partition of size " << partition_sizes[dst_rank] << " to rank " << dst_rank << endl;
-    }
-    for(int64_t dst_rank = 0; dst_rank < num_workers; dst_rank++) {
-        if(dst_rank == rank) continue;
-        struct Connection* conn = conn_state[dst_rank];
-        int64_t ret = wait_for_remote_op(conn);
-        cout << ret << endl;
     }
 
     cout << "All partitions sent" << endl;

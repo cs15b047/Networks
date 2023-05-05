@@ -299,6 +299,7 @@ static int client_xchange_metadata_with_server(char* src, uint32_t src_len_bytes
  */ 
 static int client_remote_memory_ops(struct Connection* conn_state)
 {
+	struct ibv_wc wc;
 	int ret = -1;
 	/* Step 1: is to copy the local buffer into the remote buffer. We will 
 	 * reuse the previous variables. */
@@ -324,20 +325,17 @@ static int client_remote_memory_ops(struct Connection* conn_state)
 		return -errno;
 	}
 	// cout << "Buffer send posted successfully" << endl;
-	// cout << "Work completion received successfully" << endl;
 
-	debug("Client side WRITE is complete \n");
-	return 0;
-}
-
-int wait_for_remote_op(struct Connection* conn_state) {
-	struct ibv_wc wc;
 	/* at this point we are expecting 1 work completion for the write */
-	int ret = process_work_completion_events(conn_state->io_completion_channel, &wc, 1);
+	ret = process_work_completion_events(conn_state->io_completion_channel, 
+			&wc, 1);
 	if(ret != 1) {
 		// rdma_error("We failed to get 1 work completions , ret = %d \n",ret);
 		return ret;
 	}
+	// cout << "Work completion received successfully" << endl;
+
+	debug("Client side WRITE is complete \n");
 	return 0;
 }
 
@@ -362,10 +360,10 @@ static int client_disconnect_and_clean(struct Connection* conn_state)
 	// 	//continuing anyways 
 	// }
 	// ret = rdma_ack_cm_event(cm_event);
-	if (ret) {
-		// rdma_error("Failed to acknowledge cm event, errno: %d\n", -errno);
-		//continuing anyways
-	}
+	// if (ret) {
+	// 	// rdma_error("Failed to acknowledge cm event, errno: %d\n", -errno);
+	// 	//continuing anyways
+	// }
 	/* Destroy QP */
 	rdma_destroy_qp(conn_state->cm_client_id);
 	/* Destroy client cm id */
