@@ -101,6 +101,7 @@ vector<int> receive_partitions(vector<Record>& merged_arr, uint64_t recv_ptr) {
     cout << "Received all partitions" << endl;
     cout << "Recv ptr: " << recv_ptr << ", Merged array size = " << merged_arr.size() << endl;
     assert (recv_ptr <= merged_arr.size());
+    cout << "Assert passed" << endl;
     merged_arr.resize(recv_ptr);
 
     return partition_sizes;
@@ -220,6 +221,8 @@ int main(int argc, char *argv[]) {
 
     send_thread.join();
     auto shuffle_end = chrono::high_resolution_clock::now();
+
+    cout << "Shuffle done. Starting cleanup" << endl;
 
     // free memory and clean clients
     for(int i = 0; i < num_workers; i++) {
