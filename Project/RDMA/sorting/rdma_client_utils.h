@@ -346,24 +346,28 @@ static int client_disconnect_and_clean(struct Connection* conn_state)
 {
 	struct rdma_cm_event *cm_event = NULL;
 	int ret = -1;
+	// Client Disconnection
 	/* active disconnect from the client side */
-	ret = rdma_disconnect(conn_state->cm_client_id);
-	if (ret) {
-		// rdma_error("Failed to disconnect, errno: %d \n", -errno);
-		//continuing anyways
-	}
-	ret = process_rdma_cm_event(conn_state->cm_event_channel_client, 
-			RDMA_CM_EVENT_DISCONNECTED,
-			&cm_event);
-	if (ret) {
-		// rdma_error("Failed to get RDMA_CM_EVENT_DISCONNECTED event, ret = %d\n", ret);
-		//continuing anyways 
-	}
-	ret = rdma_ack_cm_event(cm_event);
-	if (ret) {
-		// rdma_error("Failed to acknowledge cm event, errno: %d\n", -errno);
-		//continuing anyways
-	}
+	// ret = rdma_disconnect(conn_state->cm_client_id);
+	// if (ret) {
+	// 	// rdma_error("Failed to disconnect, errno: %d \n", -errno);
+	// 	//continuing anyways
+	// }
+	// ret = process_rdma_cm_event(conn_state->cm_event_channel_client, 
+	// 		RDMA_CM_EVENT_DISCONNECTED,
+	// 		&cm_event);
+	// if (ret) {
+	// 	// rdma_error("Failed to get RDMA_CM_EVENT_DISCONNECTED event, ret = %d\n", ret);
+	// 	//continuing anyways 
+	// }
+	// ret = rdma_ack_cm_event(cm_event);
+	// if (ret) {
+	// 	// rdma_error("Failed to acknowledge cm event, errno: %d\n", -errno);
+	// 	//continuing anyways
+	// }
+
+	// Objects and Memory cleanup
+
 	/* Destroy QP */
 	rdma_destroy_qp(conn_state->cm_client_id);
 	/* Destroy client cm id */
