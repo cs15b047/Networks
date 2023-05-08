@@ -227,6 +227,7 @@ int main(int argc, char *argv[]) {
     // free memory and clean clients
     for(int i = 0; i < num_workers; i++) {
         if(i == my_rank) continue;
+        cout << "Cleanup for rank " << i << endl;
         int rc = client_disconnect_and_clean(conn_state[i]);
         cout << "Disconnect/Cleanup rc = " << rc << endl;
     }
