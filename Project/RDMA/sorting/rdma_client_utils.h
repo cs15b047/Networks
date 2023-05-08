@@ -339,6 +339,10 @@ static int client_remote_memory_ops(struct Connection* conn_state)
 	return 0;
 }
 
+void deregister_client_partition_memory(struct Connection* conn_state) {
+	rdma_buffer_deregister(conn_state->client_src_mr);
+}
+
 /* This function disconnects the RDMA connection from the server and cleans up 
  * all the resources.
  */
@@ -372,18 +376,21 @@ static int client_disconnect_and_clean(struct Connection* conn_state)
 	rdma_destroy_qp(conn_state->cm_client_id);
 	/* Destroy client cm id */
 	ret = rdma_destroy_id(conn_state->cm_client_id);
+	// cout << "ID destroy: " << ret << endl;
 	if (ret) {
 		// rdma_error("Failed to destroy client id cleanly, %d \n", -errno);
 		// we continue anyways;
 	}
 	/* Destroy CQ */
 	ret = ibv_destroy_cq(conn_state->client_cq);
+	// cout <<  "CQ destroy: " << ret << endl;
 	if (ret) {
 		// rdma_error("Failed to destroy completion queue cleanly, %d \n", -errno);
 		// we continue anyways;
 	}
 	/* Destroy completion channel */
 	ret = ibv_destroy_comp_channel(conn_state->io_completion_channel);
+	// cout << "Completion channel destroy: " << ret << endl;
 	if (ret) {
 		// rdma_error("Failed to destroy completion channel cleanly, %d \n", -errno);
 		// we continue anyways;
@@ -391,7 +398,7 @@ static int client_disconnect_and_clean(struct Connection* conn_state)
 	/* Destroy memory buffers */
 	rdma_buffer_deregister(conn_state->server_metadata_mr);
 	rdma_buffer_deregister(conn_state->client_metadata_mr);	
-	rdma_buffer_deregister(conn_state->client_src_mr);	
+	deregister_client_partition_memory(conn_state);
 	/* Destroy protection domain */
 	ret = ibv_dealloc_pd(conn_state->pd);
 	if (ret) {
