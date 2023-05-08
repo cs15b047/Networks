@@ -70,7 +70,8 @@ uint64_t send_data(int sock, char* data, uint64_t size) {
     uint64_t total_sent = 0, mxm = 1000000000;
     int64_t sent = 0;
     while(total_sent < size) {
-        sent = send(sock, data + total_sent, min(mxm, size - total_sent), MSG_WAITALL);
+        sent = send(sock, data + total_sent, min(mxm, (int64_t)size - total_sent), MSG_WAITALL);
+        if(sent < 0) cout << "Error: " << errno << endl;
         total_sent += sent;
         cout << "Sent " << sent << " bytes, Total: " << total_sent << endl;
     }
