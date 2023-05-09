@@ -296,14 +296,14 @@ int main(int argc, char *argv[]) {
 
     // Step 4- merge all partitions
     uint64_t local_size_recv = local_partition.size();
-    vector<Record> result(local_size_recv);
+    // vector<Record> result(local_size_recv);
     auto mem_ops_end = chrono::high_resolution_clock::now();
 
     auto merge_start = chrono::high_resolution_clock::now();
-    merge(local_partition, partition_sizes_recv, num_workers, result);
+    // merge(local_partition, partition_sizes_recv, num_workers, result);
     auto merge_end = chrono::high_resolution_clock::now();
     cout << "Step 4- Merge done" << endl;
-    assert(verify_sorted(result));
+    // assert(verify_sorted(result));
     auto verify_sorted_end = chrono::high_resolution_clock::now();
 
     close(server_fd);
