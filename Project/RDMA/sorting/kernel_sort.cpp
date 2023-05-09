@@ -229,7 +229,6 @@ int main(int argc, char *argv[]) {
     if(num_workers > 1) server_fd = setup_server();
 
     // Step 0 - Generate random input
-    auto start = chrono::high_resolution_clock::now();
 
     vector<Record> partition(partition_size);
     generate_random_input(partition, partition_size);
@@ -243,6 +242,8 @@ int main(int argc, char *argv[]) {
     // cout << "Step 1- Starting local sort" << endl;
 
     // Step 1- sort local data
+    auto start = chrono::high_resolution_clock::now();
+    auto local_ops_start = chrono::high_resolution_clock::now();
     auto sort_start = chrono::high_resolution_clock::now();
     sort(partition.begin(), partition.end());
     auto sort_end = chrono::high_resolution_clock::now();
@@ -267,6 +268,7 @@ int main(int argc, char *argv[]) {
 
     server_conn_thread.join();
     client_conn_thread.join();
+    auto local_ops_end = chrono::high_resolution_clock::now();
     cout << "Step 3a- Connection setup done" << endl;
 
     // Step 3.1 - Send data to other workers
@@ -288,12 +290,15 @@ int main(int argc, char *argv[]) {
     send_thread.join();
     auto shuffle_end = chrono::high_resolution_clock::now();
 
+    auto mem_ops_start = chrono::high_resolution_clock::now();
     partition.clear();
     partition.shrink_to_fit();
 
     // Step 4- merge all partitions
     uint64_t local_size_recv = local_partition.size();
     vector<Record> result(local_size_recv);
+    auto mem_ops_end = chrono::high_resolution_clock::now();
+
     auto merge_start = chrono::high_resolution_clock::now();
     merge(local_partition, partition_sizes_recv, num_workers, result);
     auto merge_end = chrono::high_resolution_clock::now();
@@ -303,8 +308,10 @@ int main(int argc, char *argv[]) {
 
     close(server_fd);
 
-    cout << "Local sort: " << get_time(sort_start, sort_end) << endl;
-    cout << "Shuffle: total: " << get_time(shuffle_start, shuffle_end) << ", recv: " << get_time(shuffle_start, shuffle_recv_end) << ", resize: " << get_time(shuffle_start, resize_end) << endl;
+    cout << "Local ops: " << get_time(local_ops_start, local_ops_end) << endl;
+    cout << "\tLocal sort: " << get_time(sort_start, sort_end) << endl;
+    cout << "Shuffle: total: " << get_time(shuffle_start, shuffle_end) << ", \n\trecv: " << get_time(shuffle_start, shuffle_recv_end) << ", resize: " << get_time(shuffle_start, resize_end) << endl;
+    cout << "Memory ops: " << get_time(mem_ops_start, mem_ops_end) << endl;
     cout << "Merge: " << get_time(merge_start, merge_end) << endl;
     cout << "Total time: " << get_time(start, merge_end) << " ms" << endl;
 
