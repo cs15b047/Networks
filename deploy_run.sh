@@ -1,9 +1,9 @@
 #!/bin/bash
 
-if [ $# -ne 5 ]
+if [ $# -lt 5 ]
 then
-    echo "Usage: ./$0  <DATA SIZE (GB)> <NUM_WORKERS> <NUM_SERVERS> <USE_LD_PRELOAD> <SETUP_WORKER> [<SSH-KEY>]"
-    echo "Example: ./$0 1 2 2 true"
+    echo "Usage: $0  <DATA SIZE (GB)> <NUM_WORKERS> <NUM_SERVERS> <USE_LD_PRELOAD> <SETUP_WORKER> [<SSH-KEY>]"
+    echo "Example: $0 1 2 2 true"
     exit 1
 fi
 
