@@ -50,19 +50,21 @@ done
 
 if [ $SETUP_WORKER = "true" ]
 then
-    for ((i=1; i<$NUM_SERVERS; i++))
+    for ((i=0; i<$NUM_SERVERS; i++))
     do
         echo "Setting up worker $i"
         ssh $SSH_FLAGS ${WORKER_PREFIX}-$i "cd $REPO_DIR; git checkout $CURRENT_BRANCH; git pull origin $CURRENT_BRANCH"
-        
         ssh $SSH_FLAGS ${WORKER_PREFIX}-$i "mkdir -p $LOG_DIR"
     done
 fi
 
-for ((i=1; i<$NUM_SERVERS; i++))
+for ((i=0; i<$NUM_SERVERS; i++))
 do
-    echo "Copying to worker $i"
-    scp $SSH_FLAGS -rq $APP_DIR ${WORKER_PREFIX}-$i:$PROJECT_DIR
+    if [ $i -ne 0 ]
+    then
+        echo "Copying to worker $i"
+        scp $SSH_FLAGS -rq $APP_DIR ${WORKER_PREFIX}-$i:$PROJECT_DIR
+    fi
 done
 
 echo "Done copying to workers"
